@@ -22,7 +22,10 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AtariCAE.py" />
+    <Compile Include="AtariCAE.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="SimpleCAE.py" />
   </ItemGroup>
   <PropertyGroup>
     <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>

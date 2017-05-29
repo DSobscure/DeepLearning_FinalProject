@@ -66,3 +66,28 @@ for epoch in range(5000):
     optimizer.run(feed_dict={x: batch[0]})
     
 print("final loss %g" % cost.eval(feed_dict={x: mnist.test.images}))
+
+def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
+
+    plt.figure(figsize=(2 * 10, 4))
+
+    for i in range(n):
+        # display original
+        ax = plt.subplot(2, n, i + 1)
+        plt.imshow(origin_img[i].reshape(28, 28))
+        plt.gray()
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        # display reconstruction
+        ax = plt.subplot(2, n, i + 1 + n)
+        plt.imshow(reconstruct_img[i].reshape(28, 28))
+        plt.gray()
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+    plt.show()
+
+test_size = 10
+test_origin_img = mnist.test.images[0:test_size, :]
+test_reconstruct_img = np.reshape(x_reconstruct.eval(feed_dict = {x: test_origin_img}), [-1, 28 * 28])
+plot_n_reconstruct(test_origin_img, test_reconstruct_img)
