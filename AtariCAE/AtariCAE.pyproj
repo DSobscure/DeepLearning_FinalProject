@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>1f86b7e6-8943-4df5-a3a2-1ae85475ba50</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>AtariCAE.py</StartupFile>
+    <StartupFile>AtariCodeGenerator.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -23,6 +23,9 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AtariCAE.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="AtariCodeGenerator.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="SimpleCAE.py" />
