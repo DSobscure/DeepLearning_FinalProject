@@ -56,12 +56,13 @@ class GAN():
             self.first_observation = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='first_observation')
             self.second_observation = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='second_observation')
         with tf.variable_scope('target_model'):
-            self.cae_output, self.cg_code, self.cg_code2 = self.build_network(self.first_observation, self.second_observation, trainable=True)
+            self.cae_output, self.cae_output2, self.cg_code, self.cg_code2 = self.build_network(self.first_observation, self.second_observation, trainable=True)
         self.cae_loss = tf.reduce_mean(tf.pow(self.cae_output - self.first_observation, 2))
-        self.cg_loss = -tf.reduce_mean(tf.pow(self.cg_code - self.cg_code2, 2))
+        self.cg_loss = -tf.reduce_mean(tf.pow(self.cae_output - self.cae_output2, 2))
 
         self.optimize_cae = tf.train.RMSPropOptimizer(0.000025, momentum=0.95, epsilon=0.01).minimize(self.cae_loss)    
         self.optimize_cg = tf.train.RMSPropOptimizer(0.000025, momentum=0.95, epsilon=0.01).minimize(self.cg_loss)   
+        self.counter = 0
 
     def build_network(self, x, x2, trainable=True):
         conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
@@ -99,12 +100,15 @@ class GAN():
         dfc1_weight = tf.Variable(tf.truncated_normal([64, 512], stddev = 0.02), trainable = trainable)
         dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]), trainable = trainable)
         dfc1_hidden = tf.nn.relu(tf.matmul(fc2_hidden, dfc1_weight) + dfc1_bias)
+        dfc1_hidden2 = tf.nn.relu(tf.matmul(fc2_hidden2, dfc1_weight) + dfc1_bias)
 
         dfc2_weight = tf.Variable(tf.truncated_normal([512, 11*11*64], stddev = 0.02), trainable = trainable)
         dfc2_bias = tf.Variable(tf.constant(0.02, shape = [11*11*64]), trainable = trainable)
         dfc2_hidden = tf.nn.relu(tf.matmul(dfc1_hidden, dfc2_weight) + dfc2_bias)
+        dfc2_hidden2 = tf.nn.relu(tf.matmul(dfc1_hidden2, dfc2_weight) + dfc2_bias)
 
         dfc2_hidden_conv = tf.reshape(dfc2_hidden, [-1, 11, 11, 64])
+        dfc2_hidden_conv2 = tf.reshape(dfc2_hidden2, [-1, 11, 11, 64])
         #dfc2_hidden_conv = conv3_hidden
         #dfc2_hidden_conv2 = conv3_hidden2
 
@@ -113,24 +117,27 @@ class GAN():
         dconv1_output_shape = tf.stack([tf.shape(x)[0], 11, 11, 64])
         
         dconv1_hidden = tf.nn.relu(tf.nn.conv2d_transpose(dfc2_hidden_conv, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias)
+        dconv1_hidden2 = tf.nn.relu(tf.nn.conv2d_transpose(dfc2_hidden_conv2, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias)
 
         dconv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
         dconv2_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)
         dconv2_output_shape = tf.stack([tf.shape(x)[0], 21, 21, 32])
         
         dconv2_hidden = tf.nn.relu(tf.nn.conv2d_transpose(dconv1_hidden, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias)
+        dconv2_hidden2 = tf.nn.relu(tf.nn.conv2d_transpose(dconv1_hidden2, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias)
 
         dconv3_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
         dconv3_bias = tf.Variable(tf.constant(0.02, shape = [4]), trainable = trainable)
         dconv3_output_shape = tf.stack([tf.shape(x)[0], 84, 84, 4])
         
         dconv3_hidden = tf.nn.relu(tf.nn.conv2d_transpose(dconv2_hidden, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias)
+        dconv3_hidden2 = tf.nn.relu(tf.nn.conv2d_transpose(dconv2_hidden2, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias)
 
-        return dconv3_hidden, fc2_hidden, fc2_hidden2
+        return dconv3_hidden, dconv3_hidden2, fc2_hidden, fc2_hidden2
 
     def update(self, sess, ob0, ob1):
-        sess.run(self.cae_loss, feed_dict={self.first_observation : ob0})
-        sess.run(self.cg_loss, feed_dict={self.first_observation : ob0, self.second_observation: ob1})
+        sess.run(self.optimize_cae, feed_dict={self.first_observation : ob0})
+        sess.run(self.optimize_cg, feed_dict={self.first_observation : ob0, self.second_observation: ob1})
 
 def main(_):
     # make game eviornment
@@ -201,16 +208,16 @@ def main(_):
             # save the transition to replay buffer
             replay_memory.append((state, next_state))
             # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
-            if total_t % 4 == 0:
+            if total_t % 1 == 0:
                 samples = random.sample(replay_memory, BATCH_SIZE)
                 state_batch = [sample[0] for sample in samples]
                 next_state_batch = [sample[1] for sample in samples]
                 if total_t % 1000 == 0:
                     print("step %d, CAE loss %g"%(total_t, gan.cae_loss.eval(feed_dict={gan.first_observation: state_batch})))
                     print("step %d, CG loss %g"%(total_t, gan.cg_loss.eval(feed_dict={gan.first_observation: state_batch, gan.second_observation: next_state_batch})))
-                    #if total_t % 10000 == 0:
+                    #if total_t % 5000 == 0:
                     #    test_size = 10
-                    #    test_reconstruct_img = np.reshape(cae.target_output.eval(feed_dict = {cae.first_observation: state_batch, cae.second_observation: next_state_batch}), [-1, 84, 84, 4])
+                    #    test_reconstruct_img = np.reshape(gan.cae_output.eval(feed_dict = {gan.first_observation: state_batch}), [-1, 84, 84, 4])
                     #    plot_n_reconstruct(state_batch, test_reconstruct_img)
 
                     #print(code_converter(cae.code.eval(feed_dict={cae.first_observation: state_batch, cae.second_observation: next_state_batch})))
