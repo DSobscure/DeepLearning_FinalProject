@@ -88,7 +88,7 @@ class CG():
 def main(_):
     # make game eviornment
     env = Game.GameState()
-    qValue = np.array([np.zeros(2 ** CODE_SIZE), np.zeros(2 ** CODE_SIZE))
+    qValue = np.array([np.zeros(2 ** CODE_SIZE), np.zeros(2 ** CODE_SIZE)])
 
     # The replay memory
     replay_memory = deque()
