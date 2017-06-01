@@ -10,10 +10,10 @@ class FourTupleFeature(object):
             return (((rawBoard >> 48) & 0xFFFF))
         elif self.index == 2:#5,6,7,8
             return (((rawBoard >> 32) & 0xFFFF))
-        elif self.index == 3:#1,2,5,6
-            return (((rawBoard >> 48) & 0xFF00) | ((rawBoard >> 40) & 0xFF))
-        elif self.index == 4:#2,3,6,7
-            return (((rawBoard >> 44) & 0xFF00) | ((rawBoard >> 36) & 0xFF))
+        elif self.index == 3:#9, 10, 11, 12
+            return (((rawBoard >> 16) & 0xFFFF))
+        elif self.index == 4:#13, 14, 15, 16
+            return (((rawBoard) & 0xFFFF))
         elif self.index == 5:#6,7,10,11
             return (((rawBoard >> 28) & 0xFF00) | ((rawBoard >> 20) & 0xFF))
         else:
