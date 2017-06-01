@@ -17,13 +17,19 @@ BATCH_SIZE = 32
 
 CODE_SIZE = 64
 
+def random_code():
+    result = np.zeros(CODE_SIZE)
+    for i in range(CODE_SIZE):
+        result[i] = np.random.randint(2)
+    return result
+
 def code_converter(codeBatch):
     result = []
     for i in range(BATCH_SIZE):
         number = 0
         for j in range(CODE_SIZE):
             number *= 2
-            if codeBatch[i][j] > 0:
+            if codeBatch[i][j] > 0.5:
                 number += 1
         result.append(number)
     return result
@@ -34,57 +40,45 @@ def process_state(state):
     state = state.convert('L')      
     return np.array(state)
 
-class GAN():
+class CG():
     def __init__(self):
         with tf.variable_scope('inputs'):
             self.observation1 = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='first_observation')
-            self.observation2 = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='second_observation')
+            self.state_code = tf.placeholder(shape=[None, CODE_SIZE], dtype=tf.float32, name='state_code')
         with tf.variable_scope('target_model'):
-            self.cg_code, self.cg_code2 = self.build_network(self.observation1, self.observation2, trainable=True)
-        self.similar_cg_loss = -tf.reduce_sum(tf.pow(self.cg_code - self.cg_code2, 2))
-        self.random_cg_loss = -tf.reduce_sum(tf.pow(self.cg_code - self.cg_code2, 2))
+            self.cg_code = self.build_network(self.observation1, trainable=True)
+        self.loss = tf.reduce_sum(tf.pow(self.state_code - self.cg_code, 2))
 
-        self.optimize_similar_cg = tf.train.RMSPropOptimizer(0.000025, momentum=0.95, epsilon=0.01).minimize(self.similar_cg_loss)    
-        self.optimize_random_cg = tf.train.RMSPropOptimizer(0.000025, momentum=0.95, epsilon=0.01).minimize(self.random_cg_loss)   
+        self.optimize_op = tf.train.RMSPropOptimizer(0.000025, momentum=0.95, epsilon=0.01).minimize(self.loss)   
 
-    def build_network(self, x, x2, trainable=True):
+    def build_network(self, x, trainable=True):
         conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
-        conv1_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)
-        
+        conv1_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)        
         conv1_hidden = tf.nn.relu(tf.nn.conv2d(x, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias)
-        conv1_hidden2 = tf.nn.relu(tf.nn.conv2d(x2, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias)
 
         conv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
         conv2_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
-        
         conv2_hidden = tf.nn.relu(tf.nn.conv2d(conv1_hidden, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias)
-        conv2_hidden2 = tf.nn.relu(tf.nn.conv2d(conv1_hidden2, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias)
 
         conv3_weight = tf.Variable(tf.truncated_normal([3, 3, 64, 64], stddev = 0.02), trainable = trainable)
-        conv3_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
-        
+        conv3_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)        
         conv3_hidden = tf.nn.relu(tf.nn.conv2d(conv2_hidden, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias)
-        conv3_hidden2 = tf.nn.relu(tf.nn.conv2d(conv2_hidden2, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias)
 
         fc1_weight = tf.Variable(tf.truncated_normal([11*11*64, 512], stddev = 0.02), trainable = trainable)
         fc1_bias = tf.Variable(tf.constant(0.02, shape = [512]), trainable = trainable)
         conv3_hidden_flat = tf.reshape(conv3_hidden, [-1, 11*11*64])
-        conv3_hidden_flat2 = tf.reshape(conv3_hidden2, [-1, 11*11*64])
         fc1_hidden = tf.nn.relu(tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias)
-        fc1_hidden2 = tf.nn.relu(tf.matmul(conv3_hidden_flat2, fc1_weight) + fc1_bias)
 
         fc2_weight = tf.Variable(tf.truncated_normal([512, CODE_SIZE], stddev = 0.02), trainable = trainable)
         fc2_bias = tf.Variable(tf.constant(0.02, shape = [CODE_SIZE]), trainable = trainable)
-        fc2_hidden = tf.nn.tanh(tf.matmul(fc1_hidden, fc2_weight) + fc2_bias)
-        fc2_hidden2 = tf.nn.tanh(tf.matmul(fc1_hidden2, fc2_weight) + fc2_bias)
+        fc2_hidden = tf.nn.sigmoid(tf.matmul(fc1_hidden, fc2_weight) + fc2_bias)
 
         print("code layer shape : %s" % fc2_hidden.get_shape())
 
-        return fc2_hidden, fc2_hidden2
+        return fc2_hidden
 
-    def update(self, sess, state, next_state, random_state):
-        sess.run(self.optimize_similar_cg, feed_dict={self.observation1 : state, self.observation2: next_state})
-        sess.run(self.optimize_random_cg, feed_dict={self.observation1 : state, self.observation2: random_state})
+    def update(self, sess, state, state_code):
+        sess.run(self.optimize_op, feed_dict={self.observation1 : state, self.state_code: state_code})
 
 def main(_):
     # make game eviornment
@@ -94,7 +88,7 @@ def main(_):
     replay_memory = deque()
 
     # Behavior Network & Target Network
-    gan = GAN()
+    cg = CG()
 
     # tensorflow session
     sess = tf.InteractiveSession()
@@ -112,7 +106,7 @@ def main(_):
         next_observation, reward, done, _ = env.step(action)
         next_observation = process_state(next_observation)
         next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-        replay_memory.append((state, next_state))
+        replay_memory.append((state, random_code()))
 
         episode_reward += reward
 
@@ -153,20 +147,18 @@ def main(_):
             if len(replay_memory) >= REPLAY_MEMORY_SIZE:
                 replay_memory.popleft();
             # save the transition to replay buffer
-            replay_memory.append((state, next_state))
+            replay_memory.append((state, random_code()))
             # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
             if total_t % 4 == 0:
                 samples = random.sample(replay_memory, BATCH_SIZE)
                 state_batch = [sample[0] for sample in samples]
-                next_state_batch = [sample[1] for sample in samples]
-                random_state_batch = [sample[0] for sample in random.sample(replay_memory, BATCH_SIZE)]
+                state_code_batch = [sample[1] for sample in samples]
                 if total_t % 1000 == 0:
-                    print("step %d, Similar CG loss %g"%(total_t, gan.similar_cg_loss.eval(feed_dict={gan.observation1: state_batch, gan.observation2: next_state_batch})))
-                    print("step %d, Random CG loss %g"%(total_t, gan.random_cg_loss.eval(feed_dict={gan.observation1: state_batch, gan.observation2: random_state_batch})))
+                    print("step %d, loss %g"%(total_t, cg.loss.eval(feed_dict={cg.observation1: state_batch, cg.state_code: state_code_batch})))
 
-                    print(code_converter(gan.cg_code.eval(feed_dict={gan.observation1: state_batch})))
+                    print(code_converter(cg.cg_code.eval(feed_dict={cg.observation1: state_batch})))
 			    # Update network
-                gan.update(sess, state_batch, next_state_batch, random_state_batch)
+                cg.update(sess, state_batch, state_code_batch)
 
             if done:
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t)
