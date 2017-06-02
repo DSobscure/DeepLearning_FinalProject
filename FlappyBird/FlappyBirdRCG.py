@@ -10,17 +10,13 @@ import wrapped_flappy_bird as Game
 
 GAMMA = 0.99
 
-INITIAL_EPSILON = 1.0
-FINAL_EPSILON = 0.1
-EXPLORE_STPES = 200000
-
-# replay memory
-INIT_REPLAY_MEMORY_SIZE = 10000
-REPLAY_MEMORY_SIZE = 1000000
+INITIAL_EPSILON = 0.1
+FINAL_EPSILON = 0.0001
+EXPLORE_STPES = 100000
 
 BATCH_SIZE = 32
 
-CODE_SIZE = 16
+CODE_SIZE = 20
 
 def random_code():
     result = np.zeros(CODE_SIZE)
@@ -85,13 +81,23 @@ class CG():
     def update(self, sess, state, state_code):
         sess.run(self.optimize_op, feed_dict={self.observation1 : state, self.state_code: state_code})
 
+    def train(self, sess, env, coder_replay_memory):
+        for i in range(10000):
+            samples = random.sample(coder_replay_memory, BATCH_SIZE)
+            state_batch = [sample[0] for sample in samples]
+            state_code_batch = [sample[1] for sample in samples]
+            if i % 1000 == 0:
+                print(code_converter(self.cg_code.eval(feed_dict={self.observation1: state_batch})))
+		    # Update network
+            self.update(sess, state_batch, state_code_batch)
+
 def main(_):
     # make game eviornment
     env = Game.GameState()
     qValue = np.array([np.zeros(2 ** CODE_SIZE), np.zeros(2 ** CODE_SIZE)])
 
     # The replay memory
-    replay_memory = deque()
+    coder_replay_memory = deque()
 
     # Behavior Network & Target Network
     cg = CG()
@@ -107,19 +113,22 @@ def main(_):
     observation, _, _ = env.frame_step(do_nothing)                 # retrive first env image
     observation = process_state(observation)        # process the image
     state = np.stack([observation] * 4, axis=2)     # stack the image 4 times
-    initial_state = state
 
     episode_reward = 0    
     epsilon = INITIAL_EPSILON
-    while len(replay_memory) < INIT_REPLAY_MEMORY_SIZE:
+    while len(coder_replay_memory) < 5000:
         actions = np.zeros([2])
-        action = random.randrange(2)
-        actions[action] = 1
+        if random.random() <= 0.1:
+            action = 1
+            actions[action] = 1
+        else:
+            action = 0
+            actions[action] = 1
 
         next_observation, reward, done = env.frame_step(actions)
         next_observation = process_state(next_observation)
         next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-        replay_memory.append((state, random_code(), action, reward, next_state, done))
+        coder_replay_memory.append((state, random_code()))
 
         episode_reward += reward
 
@@ -132,16 +141,18 @@ def main(_):
             observation = process_state(observation)
             state = np.stack([observation] * 4, axis=2)
 
-            print ("Episode reward: ", episode_reward, "Buffer: ", len(replay_memory))
+            print ("Episode reward: ", episode_reward, "Buffer: ", len(coder_replay_memory))
             episode_reward = 0
         # Not over yet
         else:
             state = next_state
-
+    cg.train(sess, env, coder_replay_memory)
+    coder_replay_memory.clear();
+    
     # total steps
     total_t = 0
 
-    for episode in range(10000):
+    for episode in range(100000):
 
         # Reset the environment
         do_nothing = np.zeros(2)
@@ -149,68 +160,68 @@ def main(_):
         observation, _, _ = env.frame_step(do_nothing)                 # retrive first env image
         observation = process_state(observation)
         state = np.stack([observation] * 4, axis=2)
+        state_code = code_converter(cg.cg_code.eval(feed_dict={cg.observation1: [state]}))[0]   
         episode_reward = 0                              # store the episode reward
 
         for t in itertools.count():
             # choose a action
-            actions = np.zeros([2])         
-            if random.random() <= epsilon:
-                action = random.randrange(2)
-                actions[action] = 1
-            else:    
-                code = code_converter(cg.cg_code.eval(feed_dict={cg.observation1: [state]}))[0]   
-                code_set.add(code)         
-                action = np.argmax([value[code] for value in qValue])
-                actions[action] = 1
-            if epsilon > FINAL_EPSILON:
-                epsilon -= (1 - FINAL_EPSILON) / EXPLORE_STPES
+            actions = np.zeros([2])    
+            print([value[state_code] for value in qValue]) 
+            if t < 10000:
+                if random.random() <= 0.1:
+                    action = 1
+                    actions[action] = 1
+                else:
+                    action = 0
+                    actions[action] = 1
+            else:
+                if random.random() <= epsilon:
+                    if random.random() <= 0.1:
+                        action = 1
+                        actions[action] = 1
+                    else:
+                        action = 0
+                        actions[action] = 1
+                else:    
+                    action = np.argmax([value[state_code] for value in qValue])
+                    actions[action] = 1
+                if epsilon > FINAL_EPSILON:
+                    epsilon -= (1 - FINAL_EPSILON) / EXPLORE_STPES
             # execute the action
             next_observation, reward, done = env.frame_step(actions)
             next_observation = process_state(next_observation)
             next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
             episode_reward += reward
 
-            # if the size of replay buffer is too big, remove the oldest one. Hint: replay_memory.pop(0)
-            if len(replay_memory) >= REPLAY_MEMORY_SIZE:
-                replay_memory.popleft();
-            # save the transition to replay buffer
-            replay_memory.append((state, random_code(), action, reward, next_state, done))
-            # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
-            if total_t % 4 == 0:
-                samples = random.sample(replay_memory, BATCH_SIZE)
-                if total_t < 20000:
-                    state_batch = [sample[0] for sample in samples]
-                    state_code_batch = [sample[1] for sample in samples]
-                    if total_t % 1000 == 0:
-                        print("step %d, loss %g"%(total_t, cg.loss.eval(feed_dict={cg.observation1: state_batch, cg.state_code: state_code_batch})))
-                        print(code_converter(cg.cg_code.eval(feed_dict={cg.observation1: [initial_state]})))
-                        print(code_converter(cg.cg_code.eval(feed_dict={cg.observation1: state_batch})))
-			        # Update network
-                    cg.update(sess, state_batch, state_code_batch)
-                else:
-                    if total_t % 1000 == 0:
-                        print("Code Set: ", len(code_set))
-                    state_batch = [sample[0] for sample in samples]
-                    action_batch = [sample[2] for sample in samples]
-                    reward_batch = [sample[3] for sample in samples]
-                    next_state_batch = [sample[4] for sample in samples]
-                    done_batch = [sample[5] for sample in samples]   
-                    
-                    state_code_batch = code_converter(cg.cg_code.eval(feed_dict={cg.observation1: state_batch}))
-                    next_state_code_batch = code_converter(cg.cg_code.eval(feed_dict={cg.observation1: next_state_batch}))
+            coder_replay_memory.append((next_state, random_code()))
+            next_state_code = code_converter(cg.cg_code.eval(feed_dict={cg.observation1: [next_state]}))[0]   
+            code_set.add(next_state_code)    
 
-                    for i in range(BATCH_SIZE):
-                        if done_batch[i]:
-                            qValue[action_batch[i]][state_code_batch[i]] += 0.0025 * (reward_batch[i] - qValue[action_batch[i]][state_code_batch[i]])
-                        else:
-                            next_max = np.max([value[next_state_code_batch[i]] for value in qValue])
-                            qValue[action_batch[i]][state_code_batch[i]] += 0.0025 * (reward_batch[i] + next_max - qValue[action_batch[i]][state_code_batch[i]])
+            # if the size of replay buffer is too big, remove the oldest one. Hint: replay_memory.pop(0)
+
+            # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
+            if total_t % 1 == 0:                
+                if total_t % 1000 == 0:
+                    print("Code Set: ", len(code_set))
+
+                if done:
+                    qValue[action][state_code] += 0.25 * (reward + 0 - qValue[action][state_code])
+                else:
+                    next_max = GAMMA * np.max([value[next_state_code] for value in qValue])
+                    qValue[action][state_code] += 0.25 * (reward + next_max - qValue[action][state_code])
 
             if done:
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t)
                 break
 
+            if len(coder_replay_memory) > 50000:
+                cg.train(sess, env, coder_replay_memory)
+                coder_replay_memory.clear()
+                code_set.clear()
+                qValue = np.array([np.zeros(2 ** CODE_SIZE), np.zeros(2 ** CODE_SIZE)])
+
             state = next_state
+            state_code = next_state_code
             total_t += 1
 
 

@@ -14,6 +14,13 @@ INIT_REPLAY_MEMORY_SIZE = 10000
 REPLAY_MEMORY_SIZE = 1000000
 
 BATCH_SIZE = 32
+CODE_SIZE = 64
+
+def random_code():
+    result = np.zeros(CODE_SIZE)
+    for i in range(CODE_SIZE):
+        result[i] = np.random.randint(2)
+    return result
 
 def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
 
@@ -35,11 +42,11 @@ def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
 
 def code_converter(codeBatch):
     result = []
-    for i in range(BATCH_SIZE):
+    for i in range(len(codeBatch)):
         number = 0
-        for j in range(64):
+        for j in range(CODE_SIZE):
             number *= 2
-            if codeBatch[i][j] > 0:
+            if codeBatch[i][j] > 0.5:
                 number += 1
         result.append(number)
     return result
@@ -52,91 +59,74 @@ def process_state(state):
 
 class CAE():
     def __init__(self):
-        self.num_actions = 4
-        with tf.variable_scope('inputs'):
-            self.first_observation = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='first_observation')
-            self.second_observation = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='second_observation')
-        with tf.variable_scope('target_model'):
-            self.target_output, self.code, self.target_output2, self.code2 = self.build_network(self.first_observation, self.second_observation, trainable=True)
-        loss1 = tf.reduce_mean(tf.pow(self.target_output - self.first_observation, 2))
-        loss2 = tf.reduce_mean(tf.pow(self.target_output2 - self.second_observation, 2))
-        self.loss3 = tf.reduce_mean(tf.pow(self.code - self.code2, 2))
-        self.loss = loss1 + loss2 + 100 * (4 - self.loss3)
-        self.train_step = tf.train.RMSPropOptimizer(0.000025, momentum=0.95, epsilon=0.01).minimize(self.loss)    
+        self.state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state')
+        self.code = tf.placeholder(shape=[None, CODE_SIZE], dtype=tf.float32, name='state_code')
 
-    def build_network(self, x, x2, trainable=True):
-        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
-        conv1_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)
+        self.state_output, self.code_output = self.build_network(self.state, trainable=True)
+            
+        self.state_loss = tf.reduce_mean(tf.pow(self.state_output - self.state, 2))
+        self.code_loss = tf.reduce_mean(tf.pow(self.code_output - self.code, 2))
         
-        conv1_hidden = tf.nn.relu(tf.nn.conv2d(x, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias)
-        conv1_hidden2 = tf.nn.relu(tf.nn.conv2d(x2, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias)
+        self.optimize_state = tf.train.RMSPropOptimizer(0.00025).minimize(self.state_loss)   
+        self.optimize_code = tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss)    
+
+    def build_network(self, x, trainable=True):
+        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
+        conv1_bias = tf.Variable(tf.truncated_normal([32], stddev = 0.02), trainable = trainable)       
+        conv1_hidden = tf.nn.elu(tf.nn.conv2d(x, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias)
 
         conv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
-        conv2_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
-        
-        conv2_hidden = tf.nn.relu(tf.nn.conv2d(conv1_hidden, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias)
-        conv2_hidden2 = tf.nn.relu(tf.nn.conv2d(conv1_hidden2, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias)
+        conv2_bias = tf.Variable(tf.truncated_normal([64], stddev = 0.02), trainable = trainable)
+        conv2_hidden = tf.nn.elu(tf.nn.conv2d(conv1_hidden, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias)
 
         conv3_weight = tf.Variable(tf.truncated_normal([3, 3, 64, 64], stddev = 0.02), trainable = trainable)
-        conv3_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
-        
-        conv3_hidden = tf.nn.relu(tf.nn.conv2d(conv2_hidden, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias)
-        conv3_hidden2 = tf.nn.relu(tf.nn.conv2d(conv2_hidden2, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias)
+        conv3_bias = tf.Variable(tf.truncated_normal([64], stddev = 0.02), trainable = trainable)        
+        conv3_hidden = tf.nn.elu(tf.nn.conv2d(conv2_hidden, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias)
 
         fc1_weight = tf.Variable(tf.truncated_normal([11*11*64, 512], stddev = 0.02), trainable = trainable)
-        fc1_bias = tf.Variable(tf.constant(0.02, shape = [512]), trainable = trainable)
+        fc1_bias = tf.Variable(tf.truncated_normal([512], stddev = 0.02), trainable = trainable)
         conv3_hidden_flat = tf.reshape(conv3_hidden, [-1, 11*11*64])
-        conv3_hidden_flat2 = tf.reshape(conv3_hidden2, [-1, 11*11*64])
-        fc1_hidden = tf.nn.relu(tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias)
-        fc1_hidden2 = tf.nn.relu(tf.matmul(conv3_hidden_flat2, fc1_weight) + fc1_bias)
+        fc1_hidden = tf.nn.elu(tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias)
 
-        fc2_weight = tf.Variable(tf.truncated_normal([512, 64], stddev = 0.02), trainable = trainable)
-        fc2_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
-        fc2_hidden = tf.nn.tanh(tf.matmul(fc1_hidden, fc2_weight) + fc2_bias)
-        fc2_hidden2 = tf.nn.tanh(tf.matmul(fc1_hidden2, fc2_weight) + fc2_bias)
+        fc2_weight = tf.Variable(tf.truncated_normal([512, CODE_SIZE], stddev = 0.02), trainable = trainable)
+        fc2_bias = tf.Variable(tf.truncated_normal([CODE_SIZE], stddev = 0.02), trainable = trainable)
+        fc2_hidden = tf.nn.sigmoid(tf.matmul(fc1_hidden, fc2_weight) + fc2_bias)
 
         print("code layer shape : %s" % fc2_hidden.get_shape())
 
-        dfc1_weight = tf.Variable(tf.truncated_normal([64, 512], stddev = 0.02), trainable = trainable)
-        dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]), trainable = trainable)
-        dfc1_hidden = tf.nn.relu(tf.matmul(fc2_hidden, dfc1_weight) + dfc1_bias)
-        dfc1_hidden2 = tf.nn.relu(tf.matmul(fc2_hidden2, dfc1_weight) + dfc1_bias)
+        dfc1_weight = tf.Variable(tf.truncated_normal([CODE_SIZE, 512], stddev = 0.02), trainable = trainable)
+        dfc1_bias = tf.Variable(tf.truncated_normal([512], stddev = 0.02), trainable = trainable)
+        dfc1_hidden = tf.nn.elu(tf.matmul(fc2_hidden, dfc1_weight) + dfc1_bias)
 
         dfc2_weight = tf.Variable(tf.truncated_normal([512, 11*11*64], stddev = 0.02), trainable = trainable)
-        dfc2_bias = tf.Variable(tf.constant(0.02, shape = [11*11*64]), trainable = trainable)
-        dfc2_hidden = tf.nn.relu(tf.matmul(dfc1_hidden, dfc2_weight) + dfc2_bias)
-        dfc2_hidden2 = tf.nn.relu(tf.matmul(dfc1_hidden2, dfc2_weight) + dfc2_bias)
+        dfc2_bias = tf.Variable(tf.truncated_normal([11*11*64], stddev = 0.02), trainable = trainable)
+        dfc2_hidden = tf.nn.elu(tf.matmul(dfc1_hidden, dfc2_weight) + dfc2_bias)
 
         dfc2_hidden_conv = tf.reshape(dfc2_hidden, [-1, 11, 11, 64])
-        dfc2_hidden_conv2 = tf.reshape(dfc2_hidden2, [-1, 11, 11, 64])
         #dfc2_hidden_conv = conv3_hidden
-        #dfc2_hidden_conv2 = conv3_hidden2
 
         dconv1_weight = tf.Variable(tf.truncated_normal([3, 3, 64, 64], stddev = 0.02), trainable = trainable)
-        dconv1_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
-        dconv1_output_shape = tf.stack([tf.shape(x)[0], 11, 11, 64])
-        
-        dconv1_hidden = tf.nn.relu(tf.nn.conv2d_transpose(dfc2_hidden_conv, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias)
-        dconv1_hidden2 = tf.nn.relu(tf.nn.conv2d_transpose(dfc2_hidden_conv2, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias)
+        dconv1_bias = tf.Variable(tf.truncated_normal([64], stddev = 0.02), trainable = trainable)
+        dconv1_output_shape = tf.stack([tf.shape(x)[0], 11, 11, 64])      
+        dconv1_hidden = tf.nn.elu(tf.nn.conv2d_transpose(dfc2_hidden_conv, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias)
 
         dconv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
-        dconv2_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)
-        dconv2_output_shape = tf.stack([tf.shape(x)[0], 21, 21, 32])
-        
-        dconv2_hidden = tf.nn.relu(tf.nn.conv2d_transpose(dconv1_hidden, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias)
-        dconv2_hidden2 = tf.nn.relu(tf.nn.conv2d_transpose(dconv1_hidden2, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias)
+        dconv2_bias = tf.Variable(tf.truncated_normal([32], stddev = 0.02), trainable = trainable)
+        dconv2_output_shape = tf.stack([tf.shape(x)[0], 21, 21, 32])        
+        dconv2_hidden = tf.nn.elu(tf.nn.conv2d_transpose(dconv1_hidden, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias)
+
 
         dconv3_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
-        dconv3_bias = tf.Variable(tf.constant(0.02, shape = [4]), trainable = trainable)
-        dconv3_output_shape = tf.stack([tf.shape(x)[0], 84, 84, 4])
-        
-        dconv3_hidden = tf.nn.relu(tf.nn.conv2d_transpose(dconv2_hidden, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias)
-        dconv3_hidden2 = tf.nn.relu(tf.nn.conv2d_transpose(dconv2_hidden2, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias)
+        dconv3_bias = tf.Variable(tf.truncated_normal([4], stddev = 0.02), trainable = trainable)
+        dconv3_output_shape = tf.stack([tf.shape(x)[0], 84, 84, 4])       
+        dconv3_hidden = tf.nn.elu(tf.nn.conv2d_transpose(dconv2_hidden, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias)
 
-        return dconv3_hidden, fc2_hidden, dconv3_hidden2, fc2_hidden2
+        return dconv3_hidden, fc2_hidden
 
-    def update(self, sess, ob0, ob1):
-        loss, _ = sess.run([self.loss, self.train_step], feed_dict={self.first_observation : ob0, self.second_observation: ob1})
+    def update_state(self, sess, state):
+        sess.run(self.optimize_state, feed_dict={self.state : state})
+    def update_code(self, sess, state, code):
+        sess.run(self.optimize_code, feed_dict={self.state : state, self.code : code})
 
 def main(_):
     # make game eviornment
@@ -152,7 +142,6 @@ def main(_):
     # tensorflow session
     sess = tf.InteractiveSession()
     sess.run(tf.global_variables_initializer())
-    saver = tf.train.Saver(max_to_keep=1000)
 
     # Populate the replay buffer
     observation = env.reset()                       # retrive first env image
@@ -166,7 +155,7 @@ def main(_):
         next_observation, reward, done, _ = env.step(action)
         next_observation = process_state(next_observation)
         next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-        replay_memory.append((state, next_state))
+        replay_memory.append((state, random_code()))
 
         episode_reward += reward
 
@@ -185,7 +174,7 @@ def main(_):
     # total steps
     total_t = 0
 
-    for episode in range(5000):
+    for episode in range(50000):
 
         # Reset the environment
         observation = env.reset()
@@ -213,23 +202,25 @@ def main(_):
             if len(replay_memory) >= REPLAY_MEMORY_SIZE:
                 replay_memory.popleft();
             # save the transition to replay buffer
-            replay_memory.append((state, next_state))
+            replay_memory.append((state, random_code()))
             # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
-            if total_t % 4 == 0:
+            if total_t % 3 == 0 or total_t % 5 == 0:
                 samples = random.sample(replay_memory, BATCH_SIZE)
                 state_batch = [sample[0] for sample in samples]
-                next_state_batch = [sample[1] for sample in samples]
+                code_batch = [sample[1] for sample in samples]
                 if total_t % 1000 == 0:
-                    print("step %d, loss %g"%(total_t, cae.loss.eval(feed_dict={cae.first_observation: state_batch, cae.second_observation: next_state_batch})))
-                    print("step %d, code loss %g"%(total_t, cae.loss3.eval(feed_dict={cae.first_observation: state_batch, cae.second_observation: next_state_batch})))
-                    #if total_t % 10000 == 0:
-                    #    test_size = 10
-                    #    test_reconstruct_img = np.reshape(cae.target_output.eval(feed_dict = {cae.first_observation: state_batch, cae.second_observation: next_state_batch}), [-1, 84, 84, 4])
-                    #    plot_n_reconstruct(state_batch, test_reconstruct_img)
+                    print("step %d, state loss %g"%(total_t, cae.state_loss.eval(feed_dict={cae.state: state_batch})))
+                    print("step %d, code loss %g"%(total_t, cae.code_loss.eval(feed_dict={cae.state: state_batch, cae.code: code_batch})))
+                    if total_t % 10000 == 0:
+                        test_reconstruct_img = np.reshape(cae.state_output.eval(feed_dict = {cae.state: state_batch}), [-1, 84, 84, 4])
+                        plot_n_reconstruct(state_batch, test_reconstruct_img)
 
-                    #print(code_converter(cae.code.eval(feed_dict={cae.first_observation: state_batch, cae.second_observation: next_state_batch})))
+                    print(code_converter(cae.code_output.eval(feed_dict={cae.state: state_batch})))
 			    # Update network
-                cae.update(sess, state_batch, next_state_batch)
+                if total_t % 5 == 0:
+                    cae.update_state(sess, state_batch)
+                if total_t % 3 == 0 and total_t < 10000:
+                    cae.update_code(sess, state_batch, code_batch)
 
             if done:
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t)

@@ -3,9 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "AtariCAE", "AtariCAE\AtariCAE.pyproj", "{1F86B7E6-8943-4DF5-A3A2-1AE85475BA50}"
-EndProject
-Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "AtariDTQN", "AtariDTQN\AtariDTQN.pyproj", "{1F65CE5F-C10D-4874-BB34-D7F8382A0CEE}"
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "FinalProject", "FinalProject.pyproj", "{9D38D275-81DC-4579-94F3-A2DD2E47E9AF}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,10 +11,8 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{1F86B7E6-8943-4DF5-A3A2-1AE85475BA50}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1F86B7E6-8943-4DF5-A3A2-1AE85475BA50}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1F65CE5F-C10D-4874-BB34-D7F8382A0CEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1F65CE5F-C10D-4874-BB34-D7F8382A0CEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9D38D275-81DC-4579-94F3-A2DD2E47E9AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9D38D275-81DC-4579-94F3-A2DD2E47E9AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
