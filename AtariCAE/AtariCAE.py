@@ -22,23 +22,23 @@ def random_code():
         result[i] = np.random.randint(2)
     return result
 
-def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
-
-    plt.figure(figsize=(2 * 10, 4))
+def plot_n_reconstruct(origin_img, reconstruct_img, n = 8):
+    plt.close()
+    plt.figure(figsize=(2 * n, 4))
 
     for i in range(n):
         # display original
         ax = plt.subplot(2, n, i + 1)
-        plt.imshow(origin_img[i].reshape(84, 84, 4))
+        plt.imshow(origin_img[i].reshape(60, 60, 4))
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
 
         # display reconstruction
         ax = plt.subplot(2, n, i + 1 + n)
-        plt.imshow(reconstruct_img[i].reshape(84, 84, 4))
+        plt.imshow(reconstruct_img[i].reshape(60, 60, 4))
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
-    plt.show()
+    plt.show(block=False)
 
 def code_converter(codeBatch):
     result = []
@@ -53,13 +53,16 @@ def code_converter(codeBatch):
 
 def process_state(state):
     state = Image.fromarray(state)
-    state = ImageOps.fit(state, (84,84), centering=(0.5,0.7))
+    state = ImageOps.fit(state, (60,60), centering=(0.5,0.7))
     state = state.convert('L')      
     return np.array(state)
 
+def batch_norm(x, scope, is_training = True, epsilon=0.001, decay=0.99):
+    return tf.contrib.layers.batch_norm(x, center=True, scale=True, is_training=True)
+
 class CAE():
     def __init__(self):
-        self.state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state')
+        self.state = tf.placeholder(shape=[None, 60, 60, 4], dtype=tf.float32, name='state')
         self.code = tf.placeholder(shape=[None, CODE_SIZE], dtype=tf.float32, name='state_code')
 
         self.state_output, self.code_output = self.build_network(self.state, trainable=True)
@@ -71,57 +74,77 @@ class CAE():
         self.optimize_code = tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss)    
 
     def build_network(self, x, trainable=True):
-        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
+        conv1_weight = tf.Variable(tf.truncated_normal([6, 6, 4, 32], stddev = 0.02), trainable = trainable)
         conv1_bias = tf.Variable(tf.truncated_normal([32], stddev = 0.02), trainable = trainable)       
-        conv1_hidden = tf.nn.elu(tf.nn.conv2d(x, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias)
+        conv1_hidden_sum = tf.nn.conv2d(x, conv1_weight, strides = [1,3,3,1], padding='SAME') + conv1_bias
+        conv1_hidden_bn = batch_norm(conv1_hidden_sum, 'conv1_hidden_bn')
+        conv1_hidden = tf.nn.elu(conv1_hidden_bn)
 
         conv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
         conv2_bias = tf.Variable(tf.truncated_normal([64], stddev = 0.02), trainable = trainable)
-        conv2_hidden = tf.nn.elu(tf.nn.conv2d(conv1_hidden, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias)
+        conv2_hidden_sum = tf.nn.conv2d(conv1_hidden, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias
+        conv2_hidden_bn = batch_norm(conv2_hidden_sum, 'conv2_hidden_bn')
+        conv2_hidden = tf.nn.elu(conv2_hidden_bn)
 
         conv3_weight = tf.Variable(tf.truncated_normal([3, 3, 64, 64], stddev = 0.02), trainable = trainable)
         conv3_bias = tf.Variable(tf.truncated_normal([64], stddev = 0.02), trainable = trainable)        
-        conv3_hidden = tf.nn.elu(tf.nn.conv2d(conv2_hidden, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias)
+        conv3_hidden_sum = tf.nn.conv2d(conv2_hidden, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias
+        conv3_hidden_bn = batch_norm(conv3_hidden_sum, 'conv3_hidden_bn')
+        conv3_hidden = tf.nn.elu(conv3_hidden_bn)
 
-        fc1_weight = tf.Variable(tf.truncated_normal([11*11*64, 512], stddev = 0.02), trainable = trainable)
-        fc1_bias = tf.Variable(tf.truncated_normal([512], stddev = 0.02), trainable = trainable)
-        conv3_hidden_flat = tf.reshape(conv3_hidden, [-1, 11*11*64])
-        fc1_hidden = tf.nn.elu(tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias)
+        fc1_weight = tf.Variable(tf.truncated_normal([10*10*64, CODE_SIZE], stddev = 0.02), trainable = trainable)
+        fc1_bias = tf.Variable(tf.truncated_normal([CODE_SIZE], stddev = 0.02), trainable = trainable)
+        conv3_hidden_flat = tf.reshape(conv3_hidden, [-1, 10*10*64])
+        fc1_hidden_sum = tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias
+        fc1_hidden_bn = batch_norm(fc1_hidden_sum, 'fc1_hidden_bn')
+        fc1_hidden = tf.nn.sigmoid(fc1_hidden_bn)
 
-        fc2_weight = tf.Variable(tf.truncated_normal([512, CODE_SIZE], stddev = 0.02), trainable = trainable)
-        fc2_bias = tf.Variable(tf.truncated_normal([CODE_SIZE], stddev = 0.02), trainable = trainable)
-        fc2_hidden = tf.nn.sigmoid(tf.matmul(fc1_hidden, fc2_weight) + fc2_bias)
+        #fc2_weight = tf.Variable(tf.truncated_normal([1024, CODE_SIZE], stddev = 0.02), trainable = trainable)
+        #fc2_bias = tf.Variable(tf.truncated_normal([CODE_SIZE], stddev = 0.02), trainable = trainable)
+        #fc2_hidden_sum = tf.matmul(fc1_hidden, fc2_weight) + fc2_bias
+        #fc2_hidden_bn = batch_norm(fc2_hidden_sum, 'fc2_hidden_bn')
+        #fc2_hidden = tf.nn.sigmoid(fc2_hidden_bn)
 
-        print("code layer shape : %s" % fc2_hidden.get_shape())
+        print("code layer shape : %s" % fc1_hidden.get_shape())
 
-        dfc1_weight = tf.Variable(tf.truncated_normal([CODE_SIZE, 512], stddev = 0.02), trainable = trainable)
-        dfc1_bias = tf.Variable(tf.truncated_normal([512], stddev = 0.02), trainable = trainable)
-        dfc1_hidden = tf.nn.elu(tf.matmul(fc2_hidden, dfc1_weight) + dfc1_bias)
+        #dfc1_weight = tf.Variable(tf.truncated_normal([CODE_SIZE, 1024], stddev = 0.02), trainable = trainable)
+        #dfc1_bias = tf.Variable(tf.truncated_normal([1024], stddev = 0.02), trainable = trainable)
+        #dfc1_hidden_sum = tf.matmul(fc2_hidden, dfc1_weight) + dfc1_bias
+        #dfc1_hidden_bn = batch_norm(dfc1_hidden_sum, 'dfc1_hidden_bn')
+        #dfc1_hidden = tf.nn.elu(dfc1_hidden_bn)
 
-        dfc2_weight = tf.Variable(tf.truncated_normal([512, 11*11*64], stddev = 0.02), trainable = trainable)
-        dfc2_bias = tf.Variable(tf.truncated_normal([11*11*64], stddev = 0.02), trainable = trainable)
-        dfc2_hidden = tf.nn.elu(tf.matmul(dfc1_hidden, dfc2_weight) + dfc2_bias)
+        dfc2_weight = tf.Variable(tf.truncated_normal([CODE_SIZE, 10*10*64], stddev = 0.02), trainable = trainable)
+        dfc2_bias = tf.Variable(tf.truncated_normal([10*10*64], stddev = 0.02), trainable = trainable)
+        dfc2_hidden_sum = tf.matmul(fc1_hidden, dfc2_weight) + dfc2_bias
+        dfc2_hidden_bn = batch_norm(dfc2_hidden_sum, 'dfc2_hidden_bn')
+        dfc2_hidden = tf.nn.elu(dfc2_hidden_bn)
 
-        dfc2_hidden_conv = tf.reshape(dfc2_hidden, [-1, 11, 11, 64])
+        dfc2_hidden_conv = tf.reshape(dfc2_hidden, [-1, 10, 10, 64])
         #dfc2_hidden_conv = conv3_hidden
 
         dconv1_weight = tf.Variable(tf.truncated_normal([3, 3, 64, 64], stddev = 0.02), trainable = trainable)
         dconv1_bias = tf.Variable(tf.truncated_normal([64], stddev = 0.02), trainable = trainable)
-        dconv1_output_shape = tf.stack([tf.shape(x)[0], 11, 11, 64])      
-        dconv1_hidden = tf.nn.elu(tf.nn.conv2d_transpose(dfc2_hidden_conv, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias)
+        dconv1_output_shape = tf.stack([tf.shape(x)[0], 10, 10, 64])      
+        dconv1_hidden_sum = tf.nn.conv2d_transpose(dfc2_hidden_conv, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias
+        dconv1_hidden_bn = batch_norm(dconv1_hidden_sum, 'dconv1_hidden_bn')
+        dconv1_hidden = tf.nn.elu(dconv1_hidden_bn)
 
         dconv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
         dconv2_bias = tf.Variable(tf.truncated_normal([32], stddev = 0.02), trainable = trainable)
-        dconv2_output_shape = tf.stack([tf.shape(x)[0], 21, 21, 32])        
-        dconv2_hidden = tf.nn.elu(tf.nn.conv2d_transpose(dconv1_hidden, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias)
+        dconv2_output_shape = tf.stack([tf.shape(x)[0], 20, 20, 32])        
+        dconv2_hidden_sum = tf.nn.conv2d_transpose(dconv1_hidden, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias
+        dconv2_hidden_bn = batch_norm(dconv2_hidden_sum, 'dconv2_hidden_bn')
+        dconv2_hidden = tf.nn.elu(dconv2_hidden_bn)
 
 
-        dconv3_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
+        dconv3_weight = tf.Variable(tf.truncated_normal([6, 6, 4, 32], stddev = 0.02), trainable = trainable)
         dconv3_bias = tf.Variable(tf.truncated_normal([4], stddev = 0.02), trainable = trainable)
-        dconv3_output_shape = tf.stack([tf.shape(x)[0], 84, 84, 4])       
-        dconv3_hidden = tf.nn.elu(tf.nn.conv2d_transpose(dconv2_hidden, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias)
+        dconv3_output_shape = tf.stack([tf.shape(x)[0], 60, 60, 4])       
+        dconv3_hidden_sum = tf.nn.conv2d_transpose(dconv2_hidden, dconv3_weight, dconv3_output_shape, strides = [1,3,3,1], padding='SAME') + dconv3_bias
+        dconv3_hidden_bn = batch_norm(dconv3_hidden_sum, 'dconv3_hidden_bn')
+        dconv3_hidden = tf.nn.elu(dconv3_hidden_bn)
 
-        return dconv3_hidden, fc2_hidden
+        return dconv3_hidden, fc1_hidden
 
     def update_state(self, sess, state):
         sess.run(self.optimize_state, feed_dict={self.state : state})
@@ -174,7 +197,7 @@ def main(_):
     # total steps
     total_t = 0
 
-    for episode in range(50000):
+    for episode in range(1000000):
 
         # Reset the environment
         observation = env.reset()
@@ -212,14 +235,14 @@ def main(_):
                     print("step %d, state loss %g"%(total_t, cae.state_loss.eval(feed_dict={cae.state: state_batch})))
                     print("step %d, code loss %g"%(total_t, cae.code_loss.eval(feed_dict={cae.state: state_batch, cae.code: code_batch})))
                     if total_t % 10000 == 0:
-                        test_reconstruct_img = np.reshape(cae.state_output.eval(feed_dict = {cae.state: state_batch}), [-1, 84, 84, 4])
+                        test_reconstruct_img = np.reshape(cae.state_output.eval(feed_dict = {cae.state: state_batch}), [-1, 60, 60, 4])
                         plot_n_reconstruct(state_batch, test_reconstruct_img)
 
                     print(code_converter(cae.code_output.eval(feed_dict={cae.state: state_batch})))
 			    # Update network
-                if total_t % 5 == 0:
+                if total_t % 3 == 0:
                     cae.update_state(sess, state_batch)
-                if total_t % 3 == 0 and total_t < 10000:
+                if total_t % 5 == 0:
                     cae.update_code(sess, state_batch, code_batch)
 
             if done:
