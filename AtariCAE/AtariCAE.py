@@ -34,6 +34,12 @@ def plot_n_reconstruct(origin_img, reconstruct_img, n = 8):
         ax.get_yaxis().set_visible(False)
     plt.show(block=False)
 
+def random_code():
+    result = np.zeros(CODE_SIZE)
+    for i in range(CODE_SIZE):
+        result[i] = np.random.randint(2)
+    return result
+
 def code_converter(codeBatch):
     result = []
     for i in range(len(codeBatch)):
@@ -52,14 +58,20 @@ def process_state(state):
     return np.array(state)
 
 def batch_norm(x, scope, is_training = True, epsilon=0.001, decay=0.99):
-    return tf.contrib.layers.batch_norm(x, center=True, scale=True, is_training=True)
+    return x
+    #return tf.contrib.layers.batch_norm(x, center=True, scale=True, is_training=True)
 
 class CAE():
     def __init__(self):
         self.state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state')
-        self.state_output, self.code_output = self.build_network(self.state, trainable=True)            
+        self.state_code = tf.placeholder(shape=[None, CODE_SIZE], dtype=tf.float32, name='state_code')
+        self.state_output, self.code_output = self.build_network(self.state, trainable=True)  
+                  
         self.state_loss = tf.reduce_mean(tf.pow(self.state_output - self.state, 2))        
         self.optimize_state = tf.train.RMSPropOptimizer(0.00025).minimize(self.state_loss)   
+
+        self.code_loss = tf.reduce_mean(tf.pow(self.code_output - self.state_code, 2))
+        self.optimize_code = tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss)   
 
     def build_network(self, x, trainable=True):
         conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
@@ -137,6 +149,9 @@ class CAE():
     def update_state(self, sess, state):
         sess.run(self.optimize_state, feed_dict={self.state : state})
 
+    def update_code(self, sess, state, state_code):
+        sess.run(self.optimize_code, feed_dict={self.state : state, self.state_code: state_code})
+
 def main(_):
     # make game eviornment
     env = gym.envs.make("Breakout-v0")
@@ -165,7 +180,7 @@ def main(_):
         next_observation, reward, done, _ = env.step(action)
         next_observation = process_state(next_observation)
         next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-        replay_memory.append((state, 0))
+        replay_memory.append((state, random_code()))
 
         episode_reward += reward
 
@@ -198,7 +213,7 @@ def main(_):
         '''
 
         for t in itertools.count():
-
+            print(code_converter(cae.code_output.eval(feed_dict={cae.state: [state]}))[0])
             # choose a action
             action = random.randrange(4)
             # execute the action
@@ -212,21 +227,23 @@ def main(_):
             if len(replay_memory) >= REPLAY_MEMORY_SIZE:
                 replay_memory.popleft();
             # save the transition to replay buffer
-            replay_memory.append((state, 0))
+            replay_memory.append((state, random_code()))
             # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
             if total_t % 4 == 0:
                 samples = random.sample(replay_memory, BATCH_SIZE)
                 state_batch = [sample[0] for sample in samples]
-                if total_t % 1000 == 0:
-                    print("step %d, state loss %g"%(total_t, cae.state_loss.eval(feed_dict={cae.state: state_batch})))
-                    if total_t % 10000 == 0:
-                        test_reconstruct_img = np.reshape(cae.state_output.eval(feed_dict = {cae.state: state_batch}), [-1, 84, 84, 4])
-                        plot_n_reconstruct(state_batch, test_reconstruct_img)
+                state_code_batch = [sample[1] for sample in samples]
+                #if total_t % 1000 == 0:
+                #    print("step %d, state loss %g"%(total_t, cae.state_loss.eval(feed_dict={cae.state: state_batch})))
+                #    if total_t % 10000 == 0:
+                #        test_reconstruct_img = np.reshape(cae.state_output.eval(feed_dict = {cae.state: state_batch}), [-1, 84, 84, 4])
+                #        plot_n_reconstruct(state_batch, test_reconstruct_img)
 
-                    print(code_converter(cae.code_output.eval(feed_dict={cae.state: state_batch})))
-                    print(code_converter(cae.code_output.eval(feed_dict={cae.state: [initial_state]})))
+                #    print(code_converter(cae.code_output.eval(feed_dict={cae.state: state_batch})))
+                    
 			    # Update network
-                cae.update_state(sess, state_batch)
+                #cae.update_state(sess, state_batch)
+                cae.update_code(sess, state_batch, state_code_batch)
 
             if done:
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t)

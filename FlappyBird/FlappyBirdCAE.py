@@ -12,16 +12,16 @@ import wrapped_flappy_bird as Game
 
 GAMMA = 0.99
 
-INITIAL_EPSILON = 1.0
-FINAL_EPSILON = 0.001
-EXPLORE_STPES = 100000
+INITIAL_EPSILON = 0.1
+FINAL_EPSILON = 0.0001
+EXPLORE_STPES = 1000000
 
 # replay memory
 INIT_REPLAY_MEMORY_SIZE = 1000
 REPLAY_MEMORY_SIZE = 1000000
 
 BATCH_SIZE = 32
-CODE_SIZE = 16
+CODE_SIZE = 14
 
 def plot_n_reconstruct(origin_img, reconstruct_img, n = 8):
     plt.close()
@@ -64,7 +64,8 @@ def process_state(state):
     return np.array(state)
 
 def batch_norm(x, scope, is_training = True, epsilon=0.001, decay=0.99):
-    return tf.contrib.layers.batch_norm(x, center=True, scale=True, is_training=True)
+    return x
+    #return tf.contrib.layers.batch_norm(x, center=True, scale=True, is_training=True)
 
 class CAE():
     def __init__(self):
@@ -77,7 +78,7 @@ class CAE():
         self.optimize_state = tf.train.RMSPropOptimizer(0.00025).minimize(self.state_loss)   
 
         self.code_loss = tf.reduce_mean(tf.pow(self.code_output - self.state_code, 2))
-        self.optimize_code = tf.train.RMSPropOptimizer(0.0025).minimize(self.code_loss)   
+        self.optimize_code = tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss)   
 
     def build_network(self, x, trainable=True):
         conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
@@ -177,12 +178,8 @@ def main(_):
 
     while len(replay_memory) < INIT_REPLAY_MEMORY_SIZE:
         actions = np.zeros([2])
-        if random.random() <= 0.1:
-            action = 1
-            actions[action] = 1
-        else:
-            action = 0
-            actions[action] = 1
+        action = np.random.randint(2)
+        actions[action] = 1
 
         next_observation, reward, done = env.frame_step(actions)
         next_observation = process_state(next_observation)
@@ -231,14 +228,13 @@ def main(_):
 
             # choose a action
             actions = np.zeros([2])    
-            print([value[state_code] for value in qValue]) 
+            #if total_t < 10000:
+            #    print(state_code)
+            #else:
+            #    print([value[state_code] for value in qValue]) 
             if random.random() <= epsilon:
-                if random.random() <= 0.1:
-                    action = 1
-                    actions[action] = 1
-                else:
-                    action = 0
-                    actions[action] = 1
+                action = np.random.randint(2)
+                actions[action] = 1
             else:    
                 action = np.argmax([value[state_code] for value in qValue])
                 actions[action] = 1
@@ -287,8 +283,9 @@ def main(_):
                         else:
                             next_max = GAMMA * np.max([value[replay_next_state_code] for value in qValue])
                             qValue[replay_action][replay_state_code] += 0.025 * (replay_reward + next_max - qValue[replay_action][replay_state_code])
-                cae.update_state(sess, state_batch)
-                cae.update_code(sess, state_batch, state_code_batch)
+                #cae.update_state(sess, state_batch)
+                if total_t < 10000:
+                    cae.update_code(sess, state_batch, state_code_batch)
 
             if done:
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t)
