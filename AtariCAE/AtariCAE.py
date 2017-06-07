@@ -11,14 +11,14 @@ GAMMA = 0.99
 
 INITIAL_EPSILON = 1.0
 FINAL_EPSILON = 0.1
-EXPLORE_STPES = 500000
+EXPLORE_STPES = 200000
 
 # replay memory
-INIT_REPLAY_MEMORY_SIZE = 10000
-REPLAY_MEMORY_SIZE = 10000
+INIT_REPLAY_MEMORY_SIZE = 1000
+REPLAY_MEMORY_SIZE = 500000
 
 BATCH_SIZE = 32
-CODE_SIZE = 16
+CODE_SIZE = 18
 
 def code_converter(codeBatch):
     result = []
@@ -108,15 +108,16 @@ class CAE():
         return fc1_hidden, fc1_hidden2
 
     def update_code(self, sess, state, code, next_state):
-        sess.run([self.optimize_code, self.optimize_code2], feed_dict={self.state : state, self.state_code: code, self.state2: next_state, self.isTranning: True})
+        sess.run([self.optimize_code], feed_dict={self.state : state, self.state_code: code, self.state2: next_state, self.isTranning: True})
 
 def main(_):
     # make game eviornment
     env = gym.envs.make("Breakout-v0")
-    qValue = np.array([np.random.uniform(size=2 ** CODE_SIZE), np.random.uniform(size=2 ** CODE_SIZE), np.random.uniform(size=2 ** CODE_SIZE), np.random.uniform(size=2 ** CODE_SIZE)])
+    qValue = np.array([np.zeros(2 ** CODE_SIZE)] * 4)
 
     # The replay memory
     replay_memory = deque()
+    rl_replay_memory = deque()
     log = deque()
 
     # Behavior Network & Target Network
@@ -132,7 +133,7 @@ def main(_):
     observation = env.reset()                       # retrive first env image
     observation = process_state(observation)        # process the image
     state = np.stack([observation] * 4, axis=2)
-    random_state_code = random_code()
+    state_code = code_converter(cae.code_output.eval(feed_dict={cae.state: [state], cae.isTranning: False}))[0]   
     initial_state = state
 
     episode_reward = 0    
@@ -144,8 +145,7 @@ def main(_):
         next_observation, reward, done, _ = env.step(action)
         next_observation = process_state(next_observation)
         next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-        random_next_state_code = random_code()
-        replay_memory.append((state, random_state_code, next_state, random_next_state_code))
+        replay_memory.append((state, random_code(), next_state))
 
         episode_reward += reward
 
@@ -154,14 +154,12 @@ def main(_):
             observation = env.reset()                 # retrive first env image
             observation = process_state(observation)
             state = np.stack([observation] * 4, axis=2)
-            random_state_code = random_code()
 
             print ("Episode reward: ", episode_reward, "Buffer: ", len(replay_memory))
             episode_reward = 0
         # Not over yet
         else:
             state = next_state
-            random_state_code = random_next_state_code
 
     # total steps
     total_t = 0
@@ -180,7 +178,6 @@ def main(_):
         next_observation, reward, done, _ = env.step(VALID_ACTIONS[action])
         episode_reward += reward
         '''
-        episode_replay = []
 
         for t in itertools.count():
 
@@ -199,48 +196,54 @@ def main(_):
             next_observation, reward, done, _ = env.step(action)
             next_observation = process_state(next_observation)
             next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-            random_next_state_code = random_code()
             next_state_code = code_converter(cae.code_output.eval(feed_dict={cae.state: [next_state], cae.isTranning: False}))[0]      
+            if total_t > 10000:
+                code_set.add(next_state_code)    
             episode_reward += reward
 
-            episode_replay.append((state_code, action, reward, done, next_state_code));
+            if len(rl_replay_memory) >= REPLAY_MEMORY_SIZE:
+                rl_replay_memory.popleft();
+            rl_replay_memory.append((state_code, action, reward, done, next_state_code));
 
             # if the size of replay buffer is too big, remove the oldest one. Hint: replay_memory.pop(0)
             if len(replay_memory) >= REPLAY_MEMORY_SIZE:
                 replay_memory.popleft();
             # save the transition to replay buffer
-            replay_memory.append((state, random_state_code, next_state, random_next_state_code))
+            replay_memory.append((state, random_code(), next_state))
             # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
             if total_t % 1 == 0:
-                samples = random.sample(replay_memory, BATCH_SIZE)
-                state_batch = [sample[0] for sample in samples]
-                state_code_batch = [sample[1] for sample in samples]
-                next_state_batch = [sample[2] for sample in samples]
+                
                 if total_t % 1000 == 0:
                     print("Code Set: ", len(code_set))
-
-                    print(code_converter(cae.code_output.eval(feed_dict={cae.state: state_batch, cae.isTranning: False})))
-                    print(code_converter(cae.code_output.eval(feed_dict={cae.state: [initial_state], cae.isTranning: False})))
 			    # Update network
-                if total_t > 20000:
-                    code_set.add(state_code)    
-                    env.render()
-                if total_t > 20000 and done:
-                    episode_replay.reverse()
-                    for replay in episode_replay:
-                        replay_state_code = replay[0]
-                        replay_action = replay[1]
-                        replay_reward = replay[2]
-                        replay_done = replay[3]
-                        replay_next_state_code = replay[4]
+                if total_t > 10000:
+                    samples = random.sample(rl_replay_memory, BATCH_SIZE)
+                    state_code_batch = [sample[0] for sample in samples]
+                    action_batch = [sample[1] for sample in samples]
+                    reward_batch = [sample[2] for sample in samples]
+                    done_batch = [sample[3] for sample in samples]
+                    next_state_code_batch = [sample[4] for sample in samples]
+                    for i in range(BATCH_SIZE):
+                        replay_state_code = state_code_batch[i]
+                        replay_action = action_batch[i]
+                        replay_reward = reward_batch[i]
+                        replay_done = done_batch[i]
+                        replay_next_state_code = next_state_code_batch[i]
                         if replay_done:
-                            qValue[replay_action][replay_state_code] += 0.9 * (replay_reward + 0 - qValue[replay_action][replay_state_code])
+                            qValue[replay_action][replay_state_code] += 0.1 * (replay_reward + 0 - qValue[replay_action][replay_state_code])
                         else:
                             next_max = GAMMA * np.max([value[replay_next_state_code] for value in qValue])
-                            qValue[replay_action][replay_state_code] += 0.9 * (replay_reward + next_max - qValue[replay_action][replay_state_code])
+                            qValue[replay_action][replay_state_code] += 0.1 * (replay_reward + next_max - qValue[replay_action][replay_state_code])
                 #cae.update_state(sess, state_batch)
-                if total_t < 20000:
+                if total_t < 10000:
+                    samples = random.sample(replay_memory, BATCH_SIZE)
+                    state_batch = [sample[0] for sample in samples]
+                    state_code_batch = [sample[1] for sample in samples]
+                    next_state_batch = [sample[2] for sample in samples]
                     cae.update_code(sess, state_batch, state_code_batch, next_state_batch)
+                    if total_t % 1000 == 0:
+                        print(code_converter(cae.code_output.eval(feed_dict={cae.state: state_batch, cae.isTranning: False})))
+                        print(code_converter(cae.code_output.eval(feed_dict={cae.state: [initial_state], cae.isTranning: False})))
 
             if done:
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t)
@@ -248,7 +251,6 @@ def main(_):
 
             state = next_state
             state_code = next_state_code
-            random_state_code = random_next_state_code
             total_t += 1
 
 

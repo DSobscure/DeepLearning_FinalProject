@@ -21,7 +21,7 @@ INIT_REPLAY_MEMORY_SIZE = 1000
 REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
-CODE_SIZE = 20
+CODE_SIZE = 18
 
 def code_converter(codeBatch):
     result = []
