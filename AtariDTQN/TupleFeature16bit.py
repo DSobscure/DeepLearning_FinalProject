@@ -8,10 +8,10 @@ class TupleFeature16bit(object):
 	#ABCD
 	#EFGH
     def GetIndex(self, rawBoard):
-        if self.index == 1:#ABCD
-            return (((rawBoard >> 16) & 0xFFFF))
-        elif self.index == 2:#EFGH
-            return (((rawBoard) & 0xFFFF))
+        if self.index == 1:#ABCEFG
+            return ((rawBoard >> 8) & 0xFF00) | ((rawBoard >> 4) & 0xFF)
+        elif self.index == 2:#BCDFGH
+            return ((rawBoard >> 4) & 0xFF00) | ((rawBoard >> 0) & 0xFF)
         else:
             return 0
     

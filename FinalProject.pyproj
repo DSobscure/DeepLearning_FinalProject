@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{9d38d275-81dc-4579-94f3-a2dd2e47e9af}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>AtariDTQN\AtariDTQN.py</StartupFile>
+    <StartupFile>AtariDTQN\FlappyBirdDTQN.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -27,9 +27,12 @@
     <Compile Include="AtariCAE\AtariRCG.py" />
     <Compile Include="AtariCAE\SimpleCAE.py" />
     <Compile Include="AtariDTQN\AtariDTQN.py" />
+    <Compile Include="AtariDTQN\FlappyBirdDTQN.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="AtariDTQN\StateCodeGenerator.py" />
+    <Compile Include="AtariDTQN\TupleFeature12bit.py" />
     <Compile Include="AtariDTQN\TupleFeature16bit.py" />
-    <Compile Include="AtariDTQN\TupleFeature24bit.py" />
     <Compile Include="AtariDTQN\TupleNetwork.py" />
     <Compile Include="FlappyBird\DeepAutoEncodedTupleQNetworkLearningFlappyBird.py" />
     <Compile Include="FlappyBird\FlappyBirdCAE.py">
