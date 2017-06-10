@@ -59,7 +59,7 @@ def main(_):
     # The replay memory
     state_replay_memory = deque()
     rl_replay_memory = deque()
-    heritage_replay_memory = []
+    heritage_replay_memory = deque()
     log = deque()
 
     # Behavior Network & Target Network
