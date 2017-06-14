@@ -15,16 +15,20 @@ GAMMA = 0.99
 INITIAL_EPSILON = 1
 FINAL_EPSILON = 0.1
 EXPLORE_STPES = 500000
+CHILD_EXPLORE_STPES = 100000
 LIFE_STPES = 1000000
 
+
 # replay memory
-INIT_REPLAY_MEMORY_SIZE = 10000
+INIT_REPLAY_MEMORY_SIZE = 50000
 REPLAY_MEMORY_SIZE = 500000
 
 BATCH_SIZE = 32
 
-CODE_SIZE = 12
+CODE_SIZE = 24
 WINDOW_SIZE = 2
+
+Q_LEARNING_RATE = 0.1
 
 def elu(value):
     if value >= 0:
@@ -55,6 +59,7 @@ def main(_):
     env = gym.envs.make("Breakout-v0")
     qValue = np.array([TupleNetwork(), TupleNetwork(), TupleNetwork(), TupleNetwork()])
 
+    # The replay memory
     # The replay memory
     state_replay_memory = deque()
     rl_replay_memory = deque()
@@ -126,8 +131,11 @@ def main(_):
                 rl_replay_memory.clear()
                 code_set.clear()
                 qValue = np.array([TupleNetwork(), TupleNetwork(), TupleNetwork(), TupleNetwork()])
+                scg = SCG(CODE_SIZE)
+                sess.run(tf.global_variables_initializer())
+                epsilon += (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES * CHILD_EXPLORE_STPES
                 
-                for i in range(10000):
+                for i in range(50000):
                     samples = random.sample(state_replay_memory, BATCH_SIZE)
                     state_batch = [sample[0] for sample in samples]
                     state_code_batch = [sample[1] for sample in samples]
@@ -160,18 +168,18 @@ def main(_):
                             replay_done = done_batch[i]
                             replay_next_state_code = next_state_code_batch[i]
                             if replay_done:
-                                qValue[replay_action].UpdateValue(replay_state_code, 0.1 * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)))
+                                qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)))
                             else:
                                 next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
-                                qValue[replay_action].UpdateValue(replay_state_code, 0.1 * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
+                                qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
                 heritage_replay_memory.clear()
 
             if random.random() <= epsilon:
                 action = random.randrange(4)
             else:    
-                action = np.argmax([value.GetValue(state_code) for value in qValue])
-            if epsilon > FINAL_EPSILON:
-                epsilon -= (1 - FINAL_EPSILON) / EXPLORE_STPES
+                x = [value.GetValue(state_code) for value in qValue]               
+                action = random.sample(np.argwhere(x == np.max(x)).flatten().tolist(), 1)[0]
+
             # execute the action
             next_observation, reward, done, _ = env.step(action)
             next_observation = process_state(next_observation)
@@ -208,10 +216,10 @@ def main(_):
                     replay_done = done_batch[i]
                     replay_next_state_code = next_state_code_batch[i]
                     if replay_done:
-                        qValue[replay_action].UpdateValue(replay_state_code, 0.1 * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)))
+                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)))
                     else:
                         next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
-                        qValue[replay_action].UpdateValue(replay_state_code, 0.1 * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
+                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
 
             if done:
                 average = np.mean(log)
@@ -225,17 +233,21 @@ def main(_):
                 for episode_heritage_replay in episode_heritage_replay_memory:
                     _state, _action, _reward, _done, _next_state = episode_heritage_replay
                     transfer_reward = _reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
+                    if len(heritage_replay_memory) >= REPLAY_MEMORY_SIZE:
+                        heritage_replay_memory.popleft();
                     heritage_replay_memory.append((_state, _action, transfer_reward, _done, _next_state))
                 
                 log.append(episode_reward)
                 if len(log) > 100:
                     log.popleft()
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t, '100 mean: ', np.mean(log), ' dev: ', np.std(log))
+                total_t += 1
                 break
 
             state = next_state
             state_code = next_state_code
             total_t += 1
+            
 
 if __name__ == '__main__':
     tf.app.run()
