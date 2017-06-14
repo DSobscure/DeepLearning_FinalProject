@@ -31,8 +31,8 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="AtariDTQN\StateCodeGenerator.py" />
-    <Compile Include="AtariDTQN\TupleFeature12bit.py" />
     <Compile Include="AtariDTQN\TupleFeature16bit.py" />
+    <Compile Include="AtariDTQN\TupleFeature24bit.py" />
     <Compile Include="AtariDTQN\TupleNetwork.py" />
     <Compile Include="FlappyBird\DeepAutoEncodedTupleQNetworkLearningFlappyBird.py" />
     <Compile Include="FlappyBird\FlappyBirdCAE.py">
