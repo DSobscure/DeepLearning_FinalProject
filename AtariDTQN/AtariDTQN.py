@@ -177,8 +177,7 @@ def main(_):
             if random.random() <= epsilon:
                 action = random.randrange(4)
             else:    
-                x = [value.GetValue(state_code) for value in qValue]               
-                action = random.sample(np.argwhere(x == np.max(x)).flatten().tolist(), 1)[0]
+                action = np.argmax([value.GetValue(state_code) for value in qValue])
 
             # execute the action
             next_observation, reward, done, _ = env.step(action)
@@ -247,7 +246,7 @@ def main(_):
             state = next_state
             state_code = next_state_code
             total_t += 1
-            
+
 
 if __name__ == '__main__':
     tf.app.run()

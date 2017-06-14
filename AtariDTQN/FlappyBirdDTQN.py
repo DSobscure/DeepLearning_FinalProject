@@ -191,8 +191,7 @@ def main(_):
                 action = np.random.randint(2)
                 actions[action] = 1
             else:    
-                x = [value.GetValue(state_code) for value in qValue]               
-                action = random.sample(np.argwhere(x == np.max(x)).flatten().tolist(), 1)[0]
+                action = np.argmax([value.GetValue(state_code) for value in qValue])
                 actions[action] = 1
             
             # execute the action
