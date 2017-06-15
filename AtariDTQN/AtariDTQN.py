@@ -142,7 +142,7 @@ def main(_):
                     scg.update_code(sess, state_batch, state_code_batch, next_state_batch)
                     if i % 1000 == 0:
                         print("generate code...", i)
-                        print(scg.get_code_batch(state_batch, next_state_batch))
+                        print(scg.get_code_batch(state_batch))
                         print(scg.get_code([initial_state]))
                 if len(heritage_replay_memory) > BATCH_SIZE:
                     print("we start with heritage!")

@@ -23,8 +23,8 @@ LIFE_STPES = 100000000
 
 
 # replay memory
-INIT_REPLAY_MEMORY_SIZE = 50000
-REPLAY_MEMORY_SIZE = 500000
+INIT_REPLAY_MEMORY_SIZE = 5000
+REPLAY_MEMORY_SIZE = 50000
 
 BATCH_SIZE = 32
 
@@ -155,7 +155,7 @@ def main(_):
                     scg.update_code(sess, state_batch, state_code_batch, next_state_batch)
                     if i % 1000 == 0:
                         print("generate code...", i)
-                        print(scg.get_code_batch(state_batch, next_state_batch))
+                        print(scg.get_code_batch(state_batch))
                         print(scg.get_code([initial_state]))
                 if len(heritage_replay_memory) > BATCH_SIZE:
                     print("we start with heritage!")
