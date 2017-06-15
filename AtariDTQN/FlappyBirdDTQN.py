@@ -28,8 +28,8 @@ REPLAY_MEMORY_SIZE = 500000
 
 BATCH_SIZE = 32
 
-CODE_SIZE = 24
-WINDOW_SIZE = 2
+CODE_SIZE = 48
+WINDOW_SIZE = 4
 
 Q_LEARNING_RATE = 0.1
 
@@ -54,7 +54,7 @@ def random_code():
 def process_state(state):
     state = cv2.cvtColor(cv2.resize(state, (84, 84)), cv2.COLOR_BGR2GRAY)
     _, state = cv2.threshold(state, 1, 255, cv2.THRESH_BINARY)
-    return np.array(state).reshape([84,84,1])
+    return np.array(state)
 
 def main(_):
     env = Game.GameState()
@@ -81,9 +81,8 @@ def main(_):
     do_nothing[0] = 1
     observation, _, _ = env.frame_step(do_nothing)                       # retrive first env image
     observation = process_state(observation)        # process the image
-    state = np.stack([observation] * WINDOW_SIZE)
-    state_replay_memory.append((state[0], random_code(), state[1], random_code()))
-    state_code = scg.get_code([state[0]], [state[1]])
+    state = np.stack([observation] * WINDOW_SIZE, axis=2)
+    state_code = scg.get_code([state])
     initial_state = state
 
     episode_reward = 0    
@@ -100,8 +99,8 @@ def main(_):
 
         next_observation, reward, done = env.frame_step(actions)
         next_observation = process_state(next_observation)
-        next_state = np.array([state[1], next_observation])
-        state_replay_memory.append((next_state[0], random_code(), next_state[1], random_code()))
+        next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
+        state_replay_memory.append((state, random_code(), next_state))
         episode_reward += reward
 
         # Current game episode is over
@@ -111,7 +110,7 @@ def main(_):
             do_nothing[0] = 1
             observation, _, _ = env.frame_step(do_nothing)                 # retrive first env image
             observation = process_state(observation)
-            state = np.stack([observation] * WINDOW_SIZE)
+            state = np.stack([observation] * WINDOW_SIZE, axis=2)
 
             log.append(episode_reward)
             if len(log) > 100:
@@ -131,9 +130,9 @@ def main(_):
         do_nothing[0] = 1
         observation, _, _ = env.frame_step(do_nothing)                 # retrive first env image
         observation = process_state(observation)
-        state = np.stack([observation] * WINDOW_SIZE)
+        state = np.stack([observation] * WINDOW_SIZE, axis=2)
 
-        state_code = scg.get_code([state[0]], [state[1]])
+        state_code = scg.get_code([state])
         episode_reward = 0
 
         episode_replay_memory = []
@@ -153,27 +152,24 @@ def main(_):
                     state_batch = [sample[0] for sample in samples]
                     state_code_batch = [sample[1] for sample in samples]
                     next_state_batch = [sample[2] for sample in samples]
-                    difference_code_batch = [sample[3] for sample in samples]
-                    scg.update_code(sess, state_batch, state_code_batch, next_state_batch, difference_code_batch)
+                    scg.update_code(sess, state_batch, state_code_batch, next_state_batch)
                     if i % 1000 == 0:
                         print("generate code...", i)
                         print(scg.get_code_batch(state_batch, next_state_batch))
-                        print(scg.get_code([initial_state[0]], [initial_state[1]]))
+                        print(scg.get_code([initial_state]))
                 if len(heritage_replay_memory) > BATCH_SIZE:
                     print("we start with heritage!")
                     for j in range(50000):
                         if j % 1000 == 0:
                             print("inherit progress...", j)
                         samples = random.sample(heritage_replay_memory, BATCH_SIZE)
-                        state0_batch = [sample[0][0] for sample in samples]
-                        state1_batch = [sample[0][1] for sample in samples]
+                        state_batch = [sample[0] for sample in samples]
                         action_batch = [sample[1] for sample in samples]
                         reward_batch = [sample[2] for sample in samples]
                         done_batch = [sample[3] for sample in samples]
-                        next_state0_batch = [sample[4][0] for sample in samples]
-                        next_state1_batch = [sample[4][1] for sample in samples]
-                        state_code_batch = scg.get_code_batch(state0_batch, state1_batch)
-                        next_state_code_batch = scg.get_code_batch(next_state0_batch, next_state1_batch)
+                        next_state_batch = [sample[4] for sample in samples]
+                        state_code_batch = scg.get_code_batch(state_batch)
+                        next_state_code_batch = scg.get_code_batch(next_state_batch)
                         for i in range(BATCH_SIZE):
                             replay_state_code = state_code_batch[i]
                             replay_action = action_batch[i]
@@ -197,8 +193,8 @@ def main(_):
             # execute the action
             next_observation, reward, done = env.frame_step(actions)
             next_observation = process_state(next_observation)
-            next_state = np.array([state[1], next_observation])
-            next_state_code = scg.get_code([next_state[0]], [next_state[1]])
+            next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
+            next_state_code = scg.get_code([next_state])
             code_set.add(state_code)                   
             episode_reward += reward
 
@@ -211,7 +207,7 @@ def main(_):
 
             if len(state_replay_memory) >= REPLAY_MEMORY_SIZE:
                 state_replay_memory.popleft();
-            state_replay_memory.append((next_state[0], random_code(), next_state[1], random_code()))
+            state_replay_memory.append((state, random_code(), next_state))
             
             if len(rl_replay_memory) > INIT_REPLAY_MEMORY_SIZE and total_t % 4 == 0:
                 if total_t % 1000 == 0:

@@ -3,22 +3,17 @@ import tensorflow as tf
 class SCG():
     def __init__(self, code_size):
         self.code_size = code_size
-        self.state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='state')
-        self.next_state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='next_state')
+        self.state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state')
+        self.next_state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='next_state')
         self.state_code = tf.placeholder(shape=[None, code_size], dtype=tf.float32, name='state_code')
-        self.difference_code = tf.placeholder(shape=[None, code_size], dtype=tf.float32, name='difference_code')
-        self.code_output, self.code_output2 = self.build_network(self.state, self.next_state, trainable=True)    
-        self.difference_code_output, self.difference_code_output2 = self.build_network(self.next_state - self.state, self.next_state - self.state, trainable=True)            
+        self.code_output, self.code_output2 = self.build_network(self.state, self.next_state, trainable=True)            
 
         self.code_loss = tf.reduce_mean(tf.pow(self.code_output - self.state_code, 2))
         self.code_loss2 = tf.reduce_mean(tf.pow(self.code_output - self.code_output2, 2))
         self.optimize_code = tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss + self.code_loss2)   
 
-        self.difference_code_loss = tf.reduce_mean(tf.pow(self.difference_code_output - self.difference_code, 2))
-        self.optimize_difference_code = tf.train.RMSPropOptimizer(0.00025).minimize(self.difference_code_loss)   
-
     def build_network(self, x, x2, trainable=True):
-        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 1, 16], stddev = 0.02), trainable = trainable)
+        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 16], stddev = 0.02), trainable = trainable)
         conv1_bias = tf.Variable(tf.constant(0.02, shape = [16]), trainable = trainable)             
         conv1_hidden_sum = tf.nn.conv2d(x, conv1_weight, strides = [1,3,3,1], padding='SAME') + conv1_bias        
         conv1_hidden = tf.nn.elu(conv1_hidden_sum)
@@ -55,37 +50,27 @@ class SCG():
 
         return fc1_hidden, fc1_hidden2
 
-    def update_code(self, sess, state, code, next_state, difference_code):
-        sess.run([self.optimize_code, self.optimize_difference_code], feed_dict={self.state : state, self.state_code: code, self.next_state: next_state, self.difference_code: difference_code})
+    def update_code(self, sess, state, code, next_state):
+        sess.run([self.optimize_code], feed_dict={self.state : state, self.state_code: code, self.next_state: next_state})
 
-    def get_code(self, state, next_state):
+    def get_code(self, state):
         outputs = self.code_output.eval(feed_dict={self.state: state})
-        difference_outputs = self.difference_code_output.eval(feed_dict={self.state: state, self.next_state: next_state})
         result = 0
         for i in range(len(outputs)):
             for j in range(self.code_size):
                 result *= 2
                 if outputs[i][j] > 0.5:
                     result += 1
-            for j in range(self.code_size):
-                result *= 2
-                if difference_outputs[i][j] > 0.5:
-                    result += 1
         return result
 
-    def get_code_batch(self, state, next_state):
-        outputs = self.code_output.eval(feed_dict={self.state: next_state})
-        difference_outputs = self.difference_code_output.eval(feed_dict={self.state: state, self.next_state: next_state})
+    def get_code_batch(self, state):
+        outputs = self.code_output.eval(feed_dict={self.state: state})
         result = []
         for i in range(len(outputs)):
             number = 0
             for j in range(self.code_size):
                 number *= 2
                 if outputs[i][j] > 0.5:
-                    number += 1
-            for j in range(self.code_size):
-                number *= 2
-                if difference_outputs[i][j] > 0.5:
                     number += 1
             result.append(number)
         return result
