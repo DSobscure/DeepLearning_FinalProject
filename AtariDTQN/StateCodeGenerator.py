@@ -9,7 +9,7 @@ class SCG():
         self.state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='state')
         self.rec_state, self.code_output = self.build_network(self.state, trainable=True)            
 
-        self.code_loss = tf.reduce_mean(tf.pow(self.code_output - tf.random_uniform(shape = [self.code_size]), 2))
+        self.code_loss = tf.reduce_mean(tf.pow(self.code_output - tf.random_uniform(shape = [self.code_size],minval=-1,maxval=1), 2))
         self.rec_loss = tf.reduce_mean(tf.pow(self.rec_state - self.state, 2))
         
         self.optimize = tf.train.RMSPropOptimizer(0.001).minimize(self.code_loss + self.rec_loss)   
@@ -44,7 +44,7 @@ class SCG():
         fc2_bias = tf.Variable(tf.constant(0.02, shape = [self.code_size]), trainable = trainable)      
         fc2_hidden_sum = tf.matmul(fc1_hidden, fc2_weight) + fc2_bias
         fc2_hidden_bn = batch_norm(fc2_hidden_sum)
-        fc2_hidden = tf.nn.sigmoid(fc2_hidden_bn)
+        fc2_hidden = tf.nn.tanh(fc2_hidden_bn)
 
         code_layer = fc2_hidden
         print("code layer shape : %s" % code_layer.get_shape())
@@ -93,7 +93,7 @@ class SCG():
             number = 0
             for j in range(self.code_size):
                 number *= 2
-                if outputs[i][j] > 0.5:
+                if outputs[i][j] > 0:
                     number += 1
             result.append(number)
         return result
@@ -107,7 +107,7 @@ class SCG():
         for i in range(len(state)):
             for j in range(self.code_size):
                 number *= 2
-                if outputs[i][j] > 0.5:
+                if outputs[i][j] > 0:
                     number += 1
         return number
     def get_window_state_code_batch(self, state):
@@ -118,7 +118,7 @@ class SCG():
             for j in range(len(state[i])):
                 for k in range(self.code_size):
                     number *= 2
-                    if outputs[j][k] > 0.5:
+                    if outputs[j][k] > 0:
                         number += 1
             numbers.append(number)
         return numbers
