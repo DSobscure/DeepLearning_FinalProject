@@ -14,110 +14,143 @@ FINAL_EPSILON = 0.1
 EXPLORE_STPES = 200000
 
 # replay memory
-INIT_REPLAY_MEMORY_SIZE = 1000
-REPLAY_MEMORY_SIZE = 500000
+INIT_REPLAY_MEMORY_SIZE = 10000
+REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
-CODE_SIZE = 18
+CODE_SIZE = 24
 
-def code_converter(codeBatch):
-    result = []
-    for i in range(len(codeBatch)):
-        number = 0
-        for j in range(CODE_SIZE):
-            number *= 2
-            if codeBatch[i][j] > 0.5:
-                number += 1
-        result.append(number)
-    return result
+def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
 
-def random_code():
-    result = np.zeros(CODE_SIZE)
-    for i in range(CODE_SIZE):
-        result[i] = np.random.randint(2)
-    return result
+    plt.figure(figsize=(2 * 10, 4))
+
+    for i in range(n):
+        # display original
+        ax = plt.subplot(2, n, i + 1)
+        plt.imshow(origin_img[i].reshape(84, 84))
+        plt.gray()
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+
+        # display reconstruction
+        ax = plt.subplot(2, n, i + 1 + n)
+        plt.imshow(reconstruct_img[i].reshape(84, 84))
+        plt.gray()
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+    plt.show()
 
 def process_state(state):
     state = Image.fromarray(state)
     state = ImageOps.fit(state, (84,84), centering=(0.5,0.7))
     state = state.convert('L')      
-    return np.array(state)
+    return np.array(state).reshape([84,84,1])
 
-def batch_norm(x, scope, is_training = True, epsilon=0.001, decay=0.99):
-    return x
+def batch_norm(x):
+    return tf.contrib.layers.batch_norm(x, center=True, scale=True, is_training=True)
 
 class CAE():
     def __init__(self):
-        self.state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state')
-        self.state2 = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state2')
-        self.state_code = tf.placeholder(shape=[None, CODE_SIZE], dtype=tf.float32, name='state_code')
-        self.isTranning = tf.placeholder(tf.bool)
-        self.code_output, self.code_output2 = self.build_network(self.state, self.state2, trainable=True)            
+        self.state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='state')
+        self.rec_state, self.code_output = self.build_network(self.state, trainable=True)            
 
-        self.code_loss = tf.reduce_mean(tf.pow(self.code_output - self.state_code, 2))
-        self.optimize_code = tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss)   
+        self.code_loss = tf.reduce_mean(tf.pow(self.code_output - tf.random_uniform(shape = [CODE_SIZE]), 2))
+        self.rec_loss = tf.reduce_mean(tf.pow(self.rec_state - self.state, 2))
+        
+        self.optimize = tf.train.RMSPropOptimizer(0.001).minimize(self.code_loss + self.rec_loss)   
 
-        self.code_loss2 = tf.reduce_mean(tf.pow(self.code_output - self.code_output2, 2))
-        self.optimize_code2 = tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss2)   
-
-    def build_network(self, x, x2, trainable=True):
-        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
-        conv1_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)             
+    def build_network(self, x, trainable=True):
+        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 1, 16], stddev = 0.02), trainable = trainable)
+        conv1_bias = tf.Variable(tf.constant(0.02, shape = [16]), trainable = trainable)             
         conv1_hidden_sum = tf.nn.conv2d(x, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias      
-        conv1_hidden_bn = batch_norm(conv1_hidden_sum, 'conv1_hidden_bn', self.isTranning)        
+        conv1_hidden_bn = batch_norm(conv1_hidden_sum)        
         conv1_hidden = tf.nn.elu(conv1_hidden_bn)
 
-        conv1_hidden_sum2 = tf.nn.conv2d(x2, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias
-        conv1_hidden_bn2 = batch_norm(conv1_hidden_sum2, 'conv1_hidden_bn2', self.isTranning)
-        conv1_hidden2 = tf.nn.elu(conv1_hidden_bn2)
-
-        conv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
-        conv2_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
+        conv2_weight = tf.Variable(tf.truncated_normal([4, 4, 16, 32], stddev = 0.02), trainable = trainable)
+        conv2_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)
         conv2_hidden_sum = tf.nn.conv2d(conv1_hidden, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias
-        conv2_hidden_bn = batch_norm(conv2_hidden_sum, 'conv2_hidden_bn', self.isTranning)
+        conv2_hidden_bn = batch_norm(conv2_hidden_sum)
         conv2_hidden = tf.nn.elu(conv2_hidden_bn)
 
-        conv2_hidden_sum2 = tf.nn.conv2d(conv1_hidden2, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias
-        conv2_hidden_bn2 = batch_norm(conv2_hidden_sum2, 'conv2_hidden_bn2', self.isTranning)
-        conv2_hidden2 = tf.nn.elu(conv2_hidden_bn2)
-
-        conv3_weight = tf.Variable(tf.truncated_normal([3, 3, 64, 64], stddev = 0.02), trainable = trainable)
-        conv3_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)       
+        conv3_weight = tf.Variable(tf.truncated_normal([3, 3, 32, 32], stddev = 0.02), trainable = trainable)
+        conv3_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)       
         conv3_hidden_sum = tf.nn.conv2d(conv2_hidden, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias
-        conv3_hidden_bn = batch_norm(conv3_hidden_sum, 'conv3_hidden_bn', self.isTranning)
+        conv3_hidden_bn = batch_norm(conv3_hidden_sum)
         conv3_hidden = tf.nn.elu(conv3_hidden_bn)
 
-        conv3_hidden_sum2 = tf.nn.conv2d(conv2_hidden2, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias
-        conv3_hidden_bn2 = batch_norm(conv3_hidden_sum2, 'conv3_hidden_bn2', self.isTranning)
-        conv3_hidden2 = tf.nn.elu(conv3_hidden_bn2)
-
-        fc1_weight = tf.Variable(tf.truncated_normal([11*11*64, CODE_SIZE], stddev = 0.02), trainable = trainable)
-        fc1_bias = tf.Variable(tf.constant(0.02, shape = [CODE_SIZE]), trainable = trainable)
-        conv3_hidden_flat = tf.reshape(conv3_hidden, [-1, 11*11*64])
+        conv3_hidden_flat = tf.reshape(conv3_hidden, [-1, 11*11*32])
+        fc1_weight = tf.Variable(tf.truncated_normal([11*11*32, 512], stddev = 0.02), trainable = trainable)
+        fc1_bias = tf.Variable(tf.constant(0.02, shape = [512]), trainable = trainable)      
         fc1_hidden_sum = tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias
-        fc1_hidden_bn = batch_norm(fc1_hidden_sum, 'fc1_hidden_bn', self.isTranning)
+        fc1_hidden_bn = batch_norm(fc1_hidden_sum)
         fc1_hidden = tf.nn.sigmoid(fc1_hidden_bn)
 
-        conv3_hidden_flat2 = tf.reshape(conv3_hidden2, [-1, 11*11*64])
-        fc1_hidden_sum2 = tf.matmul(conv3_hidden_flat2, fc1_weight) + fc1_bias
-        fc1_hidden_bn2 = batch_norm(fc1_hidden_sum2, 'fc1_hidden_bn2', self.isTranning)
-        fc1_hidden2 = tf.nn.sigmoid(fc1_hidden_bn2)
+        fc2_weight = tf.Variable(tf.truncated_normal([512, CODE_SIZE], stddev = 0.02), trainable = trainable)
+        fc2_bias = tf.Variable(tf.constant(0.02, shape = [CODE_SIZE]), trainable = trainable)      
+        fc2_hidden_sum = tf.matmul(fc1_hidden, fc2_weight) + fc2_bias
+        fc2_hidden_bn = batch_norm(fc2_hidden_sum)
+        fc2_hidden = tf.nn.sigmoid(fc2_hidden_bn)
 
-        print("code layer shape : %s" % fc1_hidden.get_shape())
+        code_layer = fc2_hidden
+        print("code layer shape : %s" % code_layer.get_shape())
 
-        return fc1_hidden, fc1_hidden2
+        dfc1_weight = tf.Variable(tf.truncated_normal([CODE_SIZE, 512], stddev = 0.02))
+        dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]))
+        dfc1_hidden_sum = tf.matmul(code_layer, dfc1_weight) + dfc1_bias
+        dfc1_hidden_bn = batch_norm(dfc1_hidden_sum)
+        dfc1_hidden = tf.nn.elu(batch_norm(dfc1_hidden_bn))
 
-    def update_code(self, sess, state, code, next_state):
-        sess.run([self.optimize_code], feed_dict={self.state : state, self.state_code: code, self.state2: next_state, self.isTranning: True})
+        dfc2_weight = tf.Variable(tf.truncated_normal([512, 11*11*32], stddev = 0.02))
+        dfc2_bias = tf.Variable(tf.constant(0.02, shape = [11*11*32]))
+        dfc2_hidden_sum = tf.matmul(dfc1_hidden, dfc2_weight) + dfc2_bias
+        dfc2_hidden_bn = batch_norm(dfc2_hidden_sum)
+        dfc2_hidden = tf.nn.elu(batch_norm(dfc2_hidden_bn))
+        dfc2_hidden_conv = tf.reshape(dfc2_hidden, [-1, 11, 11, 32])
+
+        dconv1_weight = tf.Variable(tf.truncated_normal([3, 3, 32, 32], stddev = 0.02), trainable = trainable)
+        dconv1_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)
+        dconv1_output_shape = tf.stack([tf.shape(x)[0], 11, 11, 32])
+        dconv1_hidden_sum = tf.nn.conv2d_transpose(dfc2_hidden_conv, dconv1_weight, dconv1_output_shape, strides = [1,1,1,1], padding='SAME') + dconv1_bias
+        dconv1_hidden_bn = batch_norm(dconv1_hidden_sum)
+        dconv1_hidden = tf.nn.elu(dconv1_hidden_bn)
+
+        dconv2_weight = tf.Variable(tf.truncated_normal([4, 4, 16, 32], stddev = 0.02), trainable = trainable)
+        dconv2_bias = tf.Variable(tf.constant(0.02, shape = [16]), trainable = trainable)
+        dconv2_output_shape = tf.stack([tf.shape(x)[0], 21, 21, 16])
+        dconv2_hidden_sum = tf.nn.conv2d_transpose(dconv1_hidden, dconv2_weight, dconv2_output_shape, strides = [1,2,2,1], padding='SAME') + dconv2_bias
+        dconv2_hidden_bn = batch_norm(dconv2_hidden_sum)
+        dconv2_hidden = tf.nn.elu(dconv2_hidden_bn)
+
+        dconv3_weight = tf.Variable(tf.truncated_normal([8, 8, 1, 16], stddev = 0.02), trainable = trainable)
+        dconv3_bias = tf.Variable(tf.constant(0.02, shape = [1]), trainable = trainable)
+        dconv3_output_shape = tf.stack([tf.shape(x)[0], 84, 84, 1])
+        dconv3_hidden_sum = tf.nn.conv2d_transpose(dconv2_hidden, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias
+
+        return dconv3_hidden_sum, code_layer
+
+    def update_code(self, sess, state):
+        sess.run([self.optimize], feed_dict={self.state : state})
+
+    def get_code(self, state):
+        outputs = self.code_output.eval(feed_dict={self.state: state})
+        result = []
+        for i in range(len(state)):
+            number = 0
+            for j in range(CODE_SIZE):
+                number *= 2
+                if outputs[i][j] > 0.5:
+                    number += 1
+            result.append(number)
+        return result
+    def get_rec_state(self, state):
+        return self.rec_state.eval(feed_dict={self.state: state})
 
 def main(_):
     # make game eviornment
     env = gym.envs.make("Breakout-v0")
-    qValue = np.array([np.zeros(2 ** CODE_SIZE)] * 4)
 
     # The replay memory
     replay_memory = deque()
-    rl_replay_memory = deque()
     log = deque()
 
     # Behavior Network & Target Network
@@ -127,13 +160,11 @@ def main(_):
     # tensorflow session
     sess = tf.InteractiveSession()
     sess.run(tf.global_variables_initializer())
-    saver = tf.train.Saver(max_to_keep=1000)
 
     # Populate the replay buffer
     observation = env.reset()                       # retrive first env image
     observation = process_state(observation)        # process the image
-    state = np.stack([observation] * 4, axis=2)
-    state_code = code_converter(cae.code_output.eval(feed_dict={cae.state: [state], cae.isTranning: False}))[0]   
+    state = observation
     initial_state = state
 
     episode_reward = 0    
@@ -144,8 +175,8 @@ def main(_):
 
         next_observation, reward, done, _ = env.step(action)
         next_observation = process_state(next_observation)
-        next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-        replay_memory.append((state, random_code(), next_state))
+        next_state = next_observation
+        replay_memory.append(state)
 
         episode_reward += reward
 
@@ -153,7 +184,7 @@ def main(_):
         if done:
             observation = env.reset()                 # retrive first env image
             observation = process_state(observation)
-            state = np.stack([observation] * 4, axis=2)
+            state = observation
 
             print ("Episode reward: ", episode_reward, "Buffer: ", len(replay_memory))
             episode_reward = 0
@@ -161,98 +192,16 @@ def main(_):
         else:
             state = next_state
 
-    # total steps
-    total_t = 0
-
-    for episode in range(1000000):
-
-        # Reset the environment
-        observation = env.reset()                 # retrive first env image
-        observation = process_state(observation)
-        state = np.stack([observation] * 4, axis=2)
-        random_state_code = random_code()
-        state_code = code_converter(cae.code_output.eval(feed_dict={cae.state: [state], cae.isTranning: False}))[0]   
-        episode_reward = 0                              # store the episode reward
-        '''
-        How to update episode reward:
-        next_observation, reward, done, _ = env.step(VALID_ACTIONS[action])
-        episode_reward += reward
-        '''
-
-        for t in itertools.count():
-
-            #choose a action
-            #if total_t < 20000:
-            #    print(state_code)
-            #else:
-            #    print([value[state_code] for value in qValue]) 
-            if random.random() <= epsilon:
-                action = random.randrange(4)
-            else:    
-                action = np.argmax([value[state_code] for value in qValue])
-            if epsilon > FINAL_EPSILON:
-                epsilon -= (1 - FINAL_EPSILON) / EXPLORE_STPES
-            # execute the action
-            next_observation, reward, done, _ = env.step(action)
-            next_observation = process_state(next_observation)
-            next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-            next_state_code = code_converter(cae.code_output.eval(feed_dict={cae.state: [next_state], cae.isTranning: False}))[0]      
-            if total_t > 10000:
-                code_set.add(next_state_code)    
-            episode_reward += reward
-
-            if len(rl_replay_memory) >= REPLAY_MEMORY_SIZE:
-                rl_replay_memory.popleft();
-            rl_replay_memory.append((state_code, action, reward, done, next_state_code));
-
-            # if the size of replay buffer is too big, remove the oldest one. Hint: replay_memory.pop(0)
-            if len(replay_memory) >= REPLAY_MEMORY_SIZE:
-                replay_memory.popleft();
-            # save the transition to replay buffer
-            replay_memory.append((state, random_code(), next_state))
-            # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
-            if total_t % 1 == 0:
-                
-                if total_t % 1000 == 0:
-                    print("Code Set: ", len(code_set))
-			    # Update network
-                if total_t > 10000:
-                    samples = random.sample(rl_replay_memory, BATCH_SIZE)
-                    state_code_batch = [sample[0] for sample in samples]
-                    action_batch = [sample[1] for sample in samples]
-                    reward_batch = [sample[2] for sample in samples]
-                    done_batch = [sample[3] for sample in samples]
-                    next_state_code_batch = [sample[4] for sample in samples]
-                    for i in range(BATCH_SIZE):
-                        replay_state_code = state_code_batch[i]
-                        replay_action = action_batch[i]
-                        replay_reward = reward_batch[i]
-                        replay_done = done_batch[i]
-                        replay_next_state_code = next_state_code_batch[i]
-                        if replay_done:
-                            qValue[replay_action][replay_state_code] += 0.1 * (replay_reward + 0 - qValue[replay_action][replay_state_code])
-                        else:
-                            next_max = GAMMA * np.max([value[replay_next_state_code] for value in qValue])
-                            qValue[replay_action][replay_state_code] += 0.1 * (replay_reward + next_max - qValue[replay_action][replay_state_code])
-                #cae.update_state(sess, state_batch)
-                if total_t < 10000:
-                    samples = random.sample(replay_memory, BATCH_SIZE)
-                    state_batch = [sample[0] for sample in samples]
-                    state_code_batch = [sample[1] for sample in samples]
-                    next_state_batch = [sample[2] for sample in samples]
-                    cae.update_code(sess, state_batch, state_code_batch, next_state_batch)
-                    if total_t % 1000 == 0:
-                        print(code_converter(cae.code_output.eval(feed_dict={cae.state: state_batch, cae.isTranning: False})))
-                        print(code_converter(cae.code_output.eval(feed_dict={cae.state: [initial_state], cae.isTranning: False})))
-
-            if done:
-                print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t)
-                break
-
-            state = next_state
-            state_code = next_state_code
-            total_t += 1
-
+    for i in range(500000):
+        samples = random.sample(replay_memory, BATCH_SIZE)
+        cae.update_code(sess, samples)
+        if i % 1000 == 0:
+            print("generate code...", i)
+            print(cae.get_code(samples))
+            print(cae.get_code([initial_state]))
+            print(cae.rec_loss.eval(feed_dict={cae.state: samples}))
+        if (i + 1) % 50000 == 0:
+            plot_n_reconstruct(samples, cae.get_rec_state(samples))
 
 if __name__ == '__main__':
     tf.app.run()
