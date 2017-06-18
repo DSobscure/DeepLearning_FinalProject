@@ -38,28 +38,37 @@ class SCG():
         fc1_bias = tf.Variable(tf.constant(0.02, shape = [512]), trainable = trainable)      
         fc1_hidden_sum = tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias
         fc1_hidden_bn = batch_norm(fc1_hidden_sum)
-        fc1_hidden = tf.nn.sigmoid(fc1_hidden_bn)
+        fc1_hidden = tf.nn.elu(fc1_hidden_bn)
 
-        fc2_weight = tf.Variable(tf.truncated_normal([512, self.code_size], stddev = 0.02), trainable = trainable)
-        fc2_bias = tf.Variable(tf.constant(0.02, shape = [self.code_size]), trainable = trainable)      
-        fc2_hidden_sum = tf.matmul(fc1_hidden, fc2_weight) + fc2_bias
-        fc2_hidden_bn = batch_norm(fc2_hidden_sum)
-        fc2_hidden = tf.nn.tanh(fc2_hidden_bn)
+        sub_fc2_hiddens = []
+        for i in range(int(self.code_size / 4)):
+            sub_fc2_weight = tf.Variable(tf.truncated_normal([512, 4], stddev = 0.02), trainable = trainable)
+            sub_fc2_bias = tf.Variable(tf.constant(0.02, shape = [4]), trainable = trainable)      
+            sub_fc2_hidden_sum = tf.matmul(fc1_hidden, sub_fc2_weight) + sub_fc2_bias
+            sub_fc2_hidden_bn = batch_norm(sub_fc2_hidden_sum)
+            sub_fc2_hidden = tf.nn.tanh(sub_fc2_hidden_bn)
+            sub_fc2_hiddens.append(sub_fc2_hidden)
 
-        code_layer = fc2_hidden
+        code_layer = tf.concat(sub_fc2_hiddens, 1)
         print("code layer shape : %s" % code_layer.get_shape())
 
-        dfc1_weight = tf.Variable(tf.truncated_normal([self.code_size, 512], stddev = 0.02))
-        dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]))
-        dfc1_hidden_sum = tf.matmul(code_layer, dfc1_weight) + dfc1_bias
-        dfc1_hidden_bn = batch_norm(dfc1_hidden_sum)
-        dfc1_hidden = tf.nn.elu(batch_norm(dfc1_hidden_bn))
+        sub_dfc1_hiddens = []
+        for i in range(int(self.code_size / 4)):
+            sub_dfc1_weight = tf.Variable(tf.truncated_normal([4, 512], stddev = 0.02))
+            sub_dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]))
+            sub_dfc1_hidden_sum = tf.matmul(sub_fc2_hiddens[i], sub_dfc1_weight) + sub_dfc1_bias
+            sub_dfc1_hidden_bn = batch_norm(sub_dfc1_hidden_sum)
+            sub_dfc1_hidden = tf.nn.elu(sub_dfc1_hidden_bn)
+            sub_dfc1_hiddens.append(sub_dfc1_hidden)
+
+        dfc1_hidden = tf.reduce_sum(sub_dfc1_hiddens, 0)
+        print("dcode layer shape : %s" % dfc1_hidden.get_shape())
 
         dfc2_weight = tf.Variable(tf.truncated_normal([512, 11*11*32], stddev = 0.02))
         dfc2_bias = tf.Variable(tf.constant(0.02, shape = [11*11*32]))
         dfc2_hidden_sum = tf.matmul(dfc1_hidden, dfc2_weight) + dfc2_bias
         dfc2_hidden_bn = batch_norm(dfc2_hidden_sum)
-        dfc2_hidden = tf.nn.elu(batch_norm(dfc2_hidden_bn))
+        dfc2_hidden = tf.nn.elu(dfc2_hidden_bn)
         dfc2_hidden_conv = tf.reshape(dfc2_hidden, [-1, 11, 11, 32])
 
         dconv1_weight = tf.Variable(tf.truncated_normal([3, 3, 32, 32], stddev = 0.02), trainable = trainable)
