@@ -213,13 +213,13 @@ def main(_):
                 deviation = np.std(log) + 0.01
                 for episode_replay in episode_replay_memory:
                     _state_code, _action, _reward, _done, _next_state_code = episode_replay
-                    transfer_reward = _reward#_reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
+                    transfer_reward = _reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
                     if len(rl_replay_memory) >= REPLAY_MEMORY_SIZE:
                         rl_replay_memory.popleft();
                     rl_replay_memory.append((_state_code, _action, transfer_reward, _done, _next_state_code));
                 for episode_heritage_replay in episode_heritage_replay_memory:
                     _state, _action, _reward, _done, _next_state = episode_heritage_replay
-                    transfer_reward = _reward#_reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
+                    transfer_reward = _reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
                     if len(heritage_replay_memory) >= REPLAY_MEMORY_SIZE:
                         heritage_replay_memory.popleft();
                     heritage_replay_memory.append((_state, _action, transfer_reward, _done, _next_state))
