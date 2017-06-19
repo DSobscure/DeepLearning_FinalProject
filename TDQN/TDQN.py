@@ -88,8 +88,8 @@ class TDQN():
         code_layer = tf.concat(sub_fc2_hiddens, 1)
         print("code layer shape : %s" % code_layer.get_shape())
 
-        linear_weight = tf.Variable(tf.truncated_normal([self.code_size, 4], stddev = 0.02), trainable = trainable)
-        linear_bias = tf.Variable(tf.constant(0.02, shape = [4]), trainable = trainable)
+        linear_weight = tf.Variable(tf.truncated_normal([self.code_size, self.action_number], stddev = 0.02), trainable = trainable)
+        linear_bias = tf.Variable(tf.constant(0.02, shape = [self.action_number]), trainable = trainable)
         output = tf.matmul(code_layer, linear_weight) + linear_bias
 
         variables[weight_counter] = linear_weight
