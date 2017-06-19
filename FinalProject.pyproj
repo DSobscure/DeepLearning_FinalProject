@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{9d38d275-81dc-4579-94f3-a2dd2e47e9af}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>AtariDTQN\FlappyBirdDTQN.py</StartupFile>
+    <StartupFile>TDQN\FlappyBirdAgent.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -48,6 +48,19 @@
     <Compile Include="FlappyBird\libs\dataset_utils.py" />
     <Compile Include="FlappyBird\libs\utils.py" />
     <Compile Include="FlappyBird\libs\__init__.py" />
+    <Compile Include="TDQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TDQN\FlappyBirdAgent.py" />
+    <Compile Include="TDQN\TDQN.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TDQN\TupleFeature16bit.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="TDQN\TupleNetwork.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="TestEnvironment\TestEnvironment.py" />
   </ItemGroup>
   <ItemGroup>
@@ -56,6 +69,7 @@
     <Folder Include="FlappyBird" />
     <Folder Include="FlappyBird\game" />
     <Folder Include="FlappyBird\libs" />
+    <Folder Include="TDQN\" />
     <Folder Include="TestEnvironment" />
   </ItemGroup>
   <Import Project="$(PtvsTargetsFile)" Condition="Exists($(PtvsTargetsFile))" />

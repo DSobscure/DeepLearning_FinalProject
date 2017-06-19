@@ -32,7 +32,7 @@ BATCH_SIZE = 32
 CODE_SIZE = 24
 WINDOW_SIZE = 2
 
-Q_LEARNING_RATE = 0.1
+Q_LEARNING_RATE = 0.025
 
 def elu(value):
     if value >= 0:
@@ -178,6 +178,7 @@ def main(_):
                 actions[action] = 1
             else:    
                 action = np.argmax([value.GetValue(state_code) for value in qValue])
+                print([value.GetValue(state_code) for value in qValue])
                 actions[action] = 1
             
             # execute the action
