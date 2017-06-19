@@ -107,7 +107,7 @@ def main(_):
             for episode_replay in episode_replay_memory:
                 _state, _action, _reward, _next_state, _done = episode_replay
                 transfer_reward = _reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
-                replay_memory.append((_state_code, _action, transfer_reward, _done, _next_state_code));
+                replay_memory.append((_state, _action, transfer_reward, _next_state, _done));
             observation = Game.GameState()
             do_nothing = np.zeros(2)
             do_nothing[0] = 1
@@ -213,7 +213,7 @@ def main(_):
                     transfer_reward = _reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
                     if len(replay_memory) >= REPLAY_MEMORY_SIZE:
                         replay_memory.popleft();
-                    replay_memory.append((_state_code, _action, transfer_reward, _done, _next_state_code));
+                    replay_memory.append((_state, _action, transfer_reward, _next_state, _done));
                 log.append(episode_reward);
                 if len(log) > SCORE_LOG_SIZE:
                     log.popleft();
