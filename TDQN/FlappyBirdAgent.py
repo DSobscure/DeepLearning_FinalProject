@@ -12,6 +12,7 @@ import cv2
 import sys
 sys.path.append("game/")
 import wrapped_flappy_bird as Game
+import math
 
 # Hyper Parameters:
 GAMMA = 0.99
@@ -36,8 +37,20 @@ VALID_ACTIONS = [0, 1]
 
 SCORE_LOG_SIZE = 100
 
-CODE_SIZE = 64
+CODE_SIZE = 96
 Q_LEARNING_RATE = 0.01
+
+def elu(value):
+    if value >= 0:
+        return value
+    else:
+        return math.exp(value) - 1
+
+def inverse_elu(value):
+    if value < 0:
+        return value
+    else:
+        return -math.exp(-value) + 1
 
 def process_state(state):
     state = cv2.cvtColor(cv2.resize(state, (84, 84)), cv2.COLOR_BGR2GRAY)
@@ -52,6 +65,7 @@ def main(_):
     # The replay memory
     replay_memory = deque()
     log = deque()
+    log.append(0)
 
     # Behavior Network & Target Network
     tdqn = TDQN(len(VALID_ACTIONS), CODE_SIZE, GAMMA)
@@ -70,6 +84,8 @@ def main(_):
 
     epsilon = INITIAL_EPSILON
     episode_reward = 0    
+    episode_replay_memory = []
+
     while len(replay_memory) < INIT_REPLAY_MEMORY_SIZE:
         actions = np.zeros([2])
         if random.random() <= epsilon:
@@ -81,12 +97,18 @@ def main(_):
         next_observation, reward, done = env.frame_step(actions)
         next_observation = process_state(next_observation)
         next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
-        replay_memory.append((state, action, reward, next_state, done))
+        episode_replay_memory.append((state, action, reward, next_state, done))
 
         episode_reward += reward
 
         # Current game episode is over
         if done:
+            average = np.mean(log)
+            deviation = np.std(log) + 0.01
+            for episode_replay in episode_replay_memory:
+                _state, _action, _reward, _next_state, _done = episode_replay
+                transfer_reward = _reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
+                replay_memory.append((_state, _action, transfer_reward, _next_state, _done));
             observation = Game.GameState()
             do_nothing = np.zeros(2)
             do_nothing[0] = 1
@@ -98,6 +120,7 @@ def main(_):
                 log.popleft();
             print ("Episode reward: ", episode_reward, "100 mean:", np.mean(log), "Buffer: ", len(replay_memory))
             episode_reward = 0
+            episode_replay_memory = []
         # Not over yet
         else:
             state = next_state
@@ -106,6 +129,8 @@ def main(_):
     total_t = 0
 
     for episode in range(TRAINING_EPISODES):
+
+        episode_replay_memory = []
 
         # Reset the environment
         observation = Game.GameState()
@@ -128,7 +153,7 @@ def main(_):
                     action = np.argmax([value.GetValue(state_code) for value in qValue])
             actions[action] = 1
             if epsilon > FINAL_EPSILON:
-                epsilon -= (1 - FINAL_EPSILON) / EXPLORE_STPES
+                epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES
             # execute the action
             next_observation, reward, done = env.frame_step(actions)
             next_observation = process_state(next_observation)
@@ -137,10 +162,8 @@ def main(_):
             episode_reward += reward
 
             # if the size of replay buffer is too big, remove the oldest one. Hint: replay_memory.pop(0)
-            if len(replay_memory) >= REPLAY_MEMORY_SIZE:
-                replay_memory.popleft();
             # save the transition to replay buffer
-            replay_memory.append((state, action, reward, next_state, done))
+            episode_replay_memory.append((state, action, reward, next_state, done))
             # sample a minibatch from replay buffer. Hint: samples = random.sample(replay_memory, batch_size)
             if total_t % 4 == 0:
                 samples = random.sample(replay_memory, BATCH_SIZE)
@@ -157,7 +180,7 @@ def main(_):
                 if total_t % 1000 == 0:
                     print('dqn loss: ', loss)
 
-                if total_t % 16 == 0:
+                if total_t % 4 == 0:
                     state_code_batch = tdqn.get_code(state_batch)
                     next_state_code_batch = tdqn.get_code(next_state_batch)
                     loss = 0
@@ -184,6 +207,14 @@ def main(_):
                 tdqn.update_target_network(sess)
 
             if done:
+                average = np.mean(log)
+                deviation = np.std(log) + 0.01
+                for episode_replay in episode_replay_memory:
+                    _state, _action, _reward, _next_state, _done = episode_replay
+                    transfer_reward = _reward * (1 + elu((episode_reward - average) / deviation)) if (_reward >= 0) else _reward * (1 - inverse_elu((episode_reward - average) / deviation))
+                    if len(replay_memory) >= REPLAY_MEMORY_SIZE:
+                        replay_memory.popleft();
+                    replay_memory.append((_state, _action, transfer_reward, _next_state, _done));
                 log.append(episode_reward);
                 if len(log) > SCORE_LOG_SIZE:
                     log.popleft();

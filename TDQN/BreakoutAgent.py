@@ -34,7 +34,7 @@ VALID_ACTIONS = [0, 1, 2, 3]
 
 SCORE_LOG_SIZE = 100
 
-CODE_SIZE = 64
+CODE_SIZE = 96
 Q_LEARNING_RATE = 0.01
 
 def process_state(state):
@@ -145,7 +145,7 @@ def main(_):
                 if total_t % 1000 == 0:
                     print('dqn loss: ', loss)
 
-                if total_t % 16 == 0:
+                if total_t % 4 == 0:
                     state_code_batch = tdqn.get_code(state_batch)
                     next_state_code_batch = tdqn.get_code(next_state_batch)
                     loss = 0
