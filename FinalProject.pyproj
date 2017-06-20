@@ -58,6 +58,7 @@
     <Compile Include="TDQN\TupleFeature16bit.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="TDQN\TupleFeature24bit.py" />
     <Compile Include="TDQN\TupleNetwork.py">
       <SubType>Code</SubType>
     </Compile>

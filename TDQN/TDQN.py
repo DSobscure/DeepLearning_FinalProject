@@ -72,9 +72,9 @@ class TDQN():
         weight_counter += 1
 
         sub_fc2_hiddens = []
-        for i in range(int(self.code_size / 8)):
-            sub_fc2_weight = tf.Variable(tf.truncated_normal([512, 8], stddev = 0.02), trainable = trainable)
-            sub_fc2_bias = tf.Variable(tf.constant(0.02, shape = [8]), trainable = trainable)      
+        for i in range(int(self.code_size / 24)):
+            sub_fc2_weight = tf.Variable(tf.truncated_normal([512, 24], stddev = 0.02), trainable = trainable)
+            sub_fc2_bias = tf.Variable(tf.constant(0.02, shape = [24]), trainable = trainable)      
             sub_fc2_hidden_sum = tf.matmul(fc1_hidden, sub_fc2_weight) + sub_fc2_bias
             sub_fc2_hidden_bn = batch_norm(sub_fc2_hidden_sum)
             sub_fc2_hidden = tf.nn.tanh(sub_fc2_hidden_bn)

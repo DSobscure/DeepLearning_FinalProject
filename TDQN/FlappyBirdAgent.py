@@ -37,7 +37,7 @@ VALID_ACTIONS = [0, 1]
 
 SCORE_LOG_SIZE = 100
 
-CODE_SIZE = 64
+CODE_SIZE = 96
 Q_LEARNING_RATE = 0.01
 
 def elu(value):
@@ -65,6 +65,7 @@ def main(_):
     # The replay memory
     replay_memory = deque()
     log = deque()
+    log.append(0)
 
     # Behavior Network & Target Network
     tdqn = TDQN(len(VALID_ACTIONS), CODE_SIZE, GAMMA)
@@ -152,7 +153,7 @@ def main(_):
                     action = np.argmax([value.GetValue(state_code) for value in qValue])
             actions[action] = 1
             if epsilon > FINAL_EPSILON:
-                epsilon -= (1 - FINAL_EPSILON) / EXPLORE_STPES
+                epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES
             # execute the action
             next_observation, reward, done = env.frame_step(actions)
             next_observation = process_state(next_observation)
@@ -179,7 +180,7 @@ def main(_):
                 if total_t % 1000 == 0:
                     print('dqn loss: ', loss)
 
-                if total_t % 16 == 0:
+                if total_t % 4 == 0:
                     state_code_batch = tdqn.get_code(state_batch)
                     next_state_code_batch = tdqn.get_code(next_state_batch)
                     loss = 0
