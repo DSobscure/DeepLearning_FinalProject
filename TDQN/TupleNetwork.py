@@ -3,8 +3,6 @@ from TupleFeature24bit import TupleFeature24bit
 class TupleNetwork(object):
     def __init__(self):
         self.featureSet = []
-        self.featureSet.append(TupleFeature24bit(1))
-        self.featureSet.append(TupleFeature24bit(2))
         self.featureSet.append(TupleFeature24bit(3))
         self.featureSet.append(TupleFeature24bit(4))
     
