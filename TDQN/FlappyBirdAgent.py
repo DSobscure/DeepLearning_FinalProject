@@ -37,7 +37,7 @@ VALID_ACTIONS = [0, 1]
 
 SCORE_LOG_SIZE = 100
 
-CODE_SIZE = 96
+CODE_SIZE = 48
 Q_LEARNING_RATE = 0.01
 
 def elu(value):
