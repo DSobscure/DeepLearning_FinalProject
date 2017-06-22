@@ -7,16 +7,13 @@ from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
 from StateCodeGenerator import SCG
 from TupleNetwork import TupleNetwork
-import cv2
-import sys
-sys.path.append("game/")
-import wrapped_flappy_bird as Game
+import gym
 import math
 
 GAMMA = 0.99
 
-INITIAL_EPSILON = 0.2
-FINAL_EPSILON = 0.0001
+INITIAL_EPSILON = 1.0
+FINAL_EPSILON = 0.1
 EXPLORE_STPES = 500000
 CHILD_EXPLORE_STPES = 100000
 LIFE_STPES = 10000000
@@ -30,10 +27,10 @@ REPLAY_MEMORY_SIZE = 500000
 BATCH_SIZE = 32
 
 CODE_SIZE = 24
-FEATURE_COUNT = 4
+FEATURE_COUNT = 6
 WINDOW_SIZE = 4
 
-Q_LEARNING_RATE = 0.0025
+Q_LEARNING_RATE = 0.025
 
 def elu(value):
     if value >= 0:
@@ -48,13 +45,14 @@ def inverse_elu(value):
         return -math.exp(-value) + 1
 
 def process_state(state):
-    state = cv2.cvtColor(cv2.resize(state, (84, 84)), cv2.COLOR_BGR2GRAY)
-    _, state = cv2.threshold(state, 1, 255, cv2.THRESH_BINARY)
+    state = Image.fromarray(state)
+    state = ImageOps.fit(state, (84,84), centering=(0.5,0.7))
+    state = state.convert('L')      
     return np.array(state)
 
 def main(_):
-    env = Game.GameState()
-    qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT)])
+    env = gym.envs.make("Breakout-v0")
+    qValue = np.array([TupleNetwork(), TupleNetwork(), TupleNetwork(), TupleNetwork()])
 
     # The replay memory
     state_replay_memory = deque()
@@ -71,10 +69,7 @@ def main(_):
     sess.run(tf.global_variables_initializer())
 
     # Populate the replay buffer
-    observation = Game.GameState()
-    do_nothing = np.zeros(2)
-    do_nothing[0] = 1
-    observation, _, _ = env.frame_step(do_nothing)                       # retrive first env image
+    observation = env.reset()                       # retrive first env image
     observation = process_state(observation)        # process the image
     state = np.stack([observation] * 4, axis=2) 
     state_code = scg.get_code([state])[0]
@@ -84,15 +79,13 @@ def main(_):
     epsilon = INITIAL_EPSILON
 
     while len(state_replay_memory) < INIT_REPLAY_MEMORY_SIZE:
-        actions = np.zeros([2])
+        action = None
         if random.random() <= epsilon:
-            action = np.random.randint(2)
-            actions[action] = 1
-        else:    
+            action = random.randrange(4)
+        else:
             action = np.argmax([value.GetValue(state_code) for value in qValue])
-            actions[action] = 1
 
-        next_observation, reward, done = env.frame_step(actions)
+        next_observation, reward, done, _ = env.step(action)
         next_observation = process_state(next_observation)
         next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
         state_replay_memory.append(next_state)
@@ -100,10 +93,7 @@ def main(_):
 
         # Current game episode is over
         if done:
-            observation = Game.GameState()
-            do_nothing = np.zeros(2)
-            do_nothing[0] = 1
-            observation, _, _ = env.frame_step(do_nothing)                 # retrive first env image
+            observation = env.reset()                 # retrive first env image
             observation = process_state(observation)
             state = np.stack([observation] * 4, axis=2)
 
@@ -120,10 +110,7 @@ def main(_):
 
     for episode in range(1000000):
         # Reset the environment
-        observation = Game.GameState()
-        do_nothing = np.zeros(2)
-        do_nothing[0] = 1
-        observation, _, _ = env.frame_step(do_nothing)                 # retrive first env image
+        observation = env.reset()                 # retrive first env image
         observation = process_state(observation)
         state = np.stack([observation] * 4, axis=2) 
         state_code = scg.get_code([state])[0]
@@ -136,7 +123,7 @@ def main(_):
             if total_t % LIFE_STPES == 0:
                 rl_replay_memory.clear()
                 code_set.clear()
-                qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT)])
+                qValue = np.array([TupleNetwork(), TupleNetwork(), TupleNetwork(), TupleNetwork()])
                 epsilon += (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES * CHILD_EXPLORE_STPES
                 sess.run(tf.global_variables_initializer())
                 for i in range(ENCODE_STEPS):
@@ -174,16 +161,14 @@ def main(_):
                                 next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
                                 qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
                 heritage_replay_memory.clear()
-            actions = np.zeros([2])    
+            action = None
             if random.random() <= epsilon:
-                action = np.random.randint(2)
-                actions[action] = 1
-            else:    
+                action = random.randrange(4)
+            else:
                 action = np.argmax([value.GetValue(state_code) for value in qValue])
-                actions[action] = 1
             
             # execute the action
-            next_observation, reward, done = env.frame_step(actions)
+            next_observation, reward, done, _ = env.step(action)
             next_observation = process_state(next_observation)
             next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
             next_state_code = scg.get_code([next_state])[0]
