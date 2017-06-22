@@ -48,6 +48,9 @@
     <Compile Include="FlappyBird\libs\dataset_utils.py" />
     <Compile Include="FlappyBird\libs\utils.py" />
     <Compile Include="FlappyBird\libs\__init__.py" />
+    <Compile Include="SimpleDTQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="SimpleDTQN\FlappyBirdAgent.py">
       <SubType>Code</SubType>
     </Compile>
@@ -58,6 +61,9 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="SimpleDTQN\TupleFeature24bit.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="SimpleDTQN\N_BitTupleFeature.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="SimpleDTQN\TupleNetwork.py">
