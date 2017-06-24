@@ -26,11 +26,11 @@ REPLAY_MEMORY_SIZE = 500000
 
 BATCH_SIZE = 32
 
-CODE_SIZE = 24
-FEATURE_COUNT = 6
+CODE_SIZE = 16
+FEATURE_COUNT = 16
 WINDOW_SIZE = 4
 
-Q_LEARNING_RATE = 0.025
+Q_LEARNING_RATE = 0.0025
 
 def elu(value):
     if value >= 0:
@@ -52,7 +52,7 @@ def process_state(state):
 
 def main(_):
     env = gym.envs.make("Breakout-v0")
-    qValue = np.array([TupleNetwork(), TupleNetwork(), TupleNetwork(), TupleNetwork()])
+    qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT)])
 
     # The replay memory
     state_replay_memory = deque()
@@ -123,7 +123,7 @@ def main(_):
             if total_t % LIFE_STPES == 0:
                 rl_replay_memory.clear()
                 code_set.clear()
-                qValue = np.array([TupleNetwork(), TupleNetwork(), TupleNetwork(), TupleNetwork()])
+                qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT)])
                 epsilon += (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES * CHILD_EXPLORE_STPES
                 sess.run(tf.global_variables_initializer())
                 for i in range(ENCODE_STEPS):
@@ -186,7 +186,7 @@ def main(_):
                 state_replay_memory.popleft();
             state_replay_memory.append(next_state)
             
-            if len(rl_replay_memory) > INIT_REPLAY_MEMORY_SIZE and total_t % 4 == 0:
+            if len(rl_replay_memory) > INIT_REPLAY_MEMORY_SIZE and total_t % 2 == 0:
                 if total_t % 1000 == 0:
                     print("Code Set: ", len(code_set))
 
@@ -197,7 +197,7 @@ def main(_):
                 done_batch = [sample[3] for sample in samples]
                 next_state_code_batch = [sample[4] for sample in samples]
                 score_batch = [sample[5] for sample in samples]
-                for i in range(BATCH_SIZE):
+                for i in range(4):
                     replay_state_code = state_code_batch[i]
                     replay_action = action_batch[i]
                     replay_reward = reward_batch[i] * (1 + elu((score_batch[i] - average) / deviation)) if (reward_batch[i] >= 0) else reward_batch[i] * (1 - inverse_elu((score_batch[i] - average) / deviation))
