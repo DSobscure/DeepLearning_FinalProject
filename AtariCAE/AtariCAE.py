@@ -18,7 +18,7 @@ INIT_REPLAY_MEMORY_SIZE = 10000
 REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
-CODE_SIZE = 24
+CODE_SIZE = 16
 
 def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
 
@@ -51,13 +51,23 @@ def batch_norm(x):
 
 class CAE():
     def __init__(self):
+        self.encode_level = 2
         self.state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='state')
-        self.rec_state, self.code_output = self.build_network(self.state, trainable=True)            
-
-        self.code_loss = tf.reduce_mean(tf.pow(self.code_output - tf.random_uniform(shape = [CODE_SIZE],minval=-1,maxval=1), 2))
-        self.rec_loss = tf.reduce_mean(tf.pow(self.rec_state - self.state, 2))
+        self.original_states = [self.state]
+        self.rec_states = []
+        for i in range(self.encode_level):
+            rec_state = self.build_network(self.original_states[i], trainable=True)  
+            self.rec_states.append(rec_state)
+            self.original_states.append(self.original_states[i] - rec_state)
         
-        self.optimize = tf.train.RMSPropOptimizer(0.001).minimize(self.code_loss + self.rec_loss)   
+        self.rec_loss1 = tf.reduce_mean(tf.pow(self.rec_states[0] - self.original_states[0], 2))
+        self.rec_loss2 = tf.reduce_mean(tf.pow(self.rec_states[1] - self.original_states[1], 2))
+        
+        self.optimize1 = tf.train.RMSPropOptimizer(0.001).minimize(self.rec_loss1)  
+        self.optimize2 = tf.train.RMSPropOptimizer(0.001).minimize(self.rec_loss2)  
+
+        self.rec_state =  self.rec_states[0] + self.rec_states[1]
+        print(self.rec_state.get_shape())
 
     def build_network(self, x, trainable=True):
         conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 1, 16], stddev = 0.02), trainable = trainable)
@@ -85,28 +95,21 @@ class CAE():
         fc1_hidden_bn = batch_norm(fc1_hidden_sum)
         fc1_hidden = tf.nn.elu(fc1_hidden_bn)
 
-        sub_fc2_hiddens = []
-        for i in range(int(CODE_SIZE / 4)):
-            sub_fc2_weight = tf.Variable(tf.truncated_normal([512, 4], stddev = 0.02), trainable = trainable)
-            sub_fc2_bias = tf.Variable(tf.constant(0.02, shape = [4]), trainable = trainable)      
-            sub_fc2_hidden_sum = tf.matmul(fc1_hidden, sub_fc2_weight) + sub_fc2_bias
-            sub_fc2_hidden_bn = batch_norm(sub_fc2_hidden_sum)
-            sub_fc2_hidden = tf.nn.tanh(sub_fc2_hidden_bn)
-            sub_fc2_hiddens.append(sub_fc2_hidden)
+        fc2_weight = tf.Variable(tf.truncated_normal([512, CODE_SIZE], stddev = 0.02), trainable = trainable)
+        fc2_bias = tf.Variable(tf.constant(0.02, shape = [CODE_SIZE]), trainable = trainable)      
+        fc2_hidden_sum = tf.matmul(fc1_hidden, fc2_weight) + fc2_bias
+        fc2_hidden_bn = batch_norm(fc2_hidden_sum)
+        fc2_hidden = tf.nn.tanh(fc2_hidden_bn)
 
-        code_layer = tf.concat(sub_fc2_hiddens, 1)
+        code_layer = fc2_hidden
         print("code layer shape : %s" % code_layer.get_shape())
 
-        sub_dfc1_hiddens = []
-        for i in range(int(CODE_SIZE / 4)):
-            sub_dfc1_weight = tf.Variable(tf.truncated_normal([4, 512], stddev = 0.02))
-            sub_dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]))
-            sub_dfc1_hidden_sum = tf.matmul(sub_fc2_hiddens[i], sub_dfc1_weight) + sub_dfc1_bias
-            sub_dfc1_hidden_bn = batch_norm(sub_dfc1_hidden_sum)
-            sub_dfc1_hidden = tf.nn.elu(sub_dfc1_hidden_bn)
-            sub_dfc1_hiddens.append(sub_dfc1_hidden)
+        dfc1_weight = tf.Variable(tf.truncated_normal([CODE_SIZE, 512], stddev = 0.02))
+        dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]))
+        dfc1_hidden_sum = tf.matmul(fc2_hidden, dfc1_weight) + dfc1_bias
+        dfc1_hidden_bn = batch_norm(dfc1_hidden_sum)
+        dfc1_hidden = tf.nn.elu(dfc1_hidden_bn)
 
-        dfc1_hidden = tf.reduce_sum(sub_dfc1_hiddens, 0)
         print("dcode layer shape : %s" % dfc1_hidden.get_shape())
 
         dfc2_weight = tf.Variable(tf.truncated_normal([512, 11*11*32], stddev = 0.02))
@@ -135,22 +138,22 @@ class CAE():
         dconv3_output_shape = tf.stack([tf.shape(x)[0], 84, 84, 1])
         dconv3_hidden_sum = tf.nn.conv2d_transpose(dconv2_hidden, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias
 
-        return dconv3_hidden_sum, code_layer
+        return dconv3_hidden_sum
 
     def update_code(self, sess, state):
-        sess.run([self.optimize], feed_dict={self.state : state})
+        sess.run([self.optimize1, self.optimize2], feed_dict={self.state : state})
 
-    def get_code(self, state):
-        outputs = self.code_output.eval(feed_dict={self.state: state})
-        result = []
-        for i in range(len(state)):
-            number = 0
-            for j in range(CODE_SIZE):
-                number *= 2
-                if outputs[i][j] > 0:
-                    number += 1
-            result.append(number)
-        return result
+    #def get_code(self, state):
+    #    outputs = self.code_output.eval(feed_dict={self.state: state})
+    #    result = []
+    #    for i in range(len(state)):
+    #        number = 0
+    #        for j in range(CODE_SIZE):
+    #            number *= 2
+    #            if outputs[i][j] > 0:
+    #                number += 1
+    #        result.append(number)
+    #    return result
     def get_rec_state(self, state):
         return self.rec_state.eval(feed_dict={self.state: state})
 
@@ -206,11 +209,13 @@ def main(_):
         cae.update_code(sess, samples)
         if i % 1000 == 0:
             print("generate code...", i)
-            print(cae.get_code(samples))
-            print(cae.get_code([initial_state]))
-            print(cae.rec_loss.eval(feed_dict={cae.state: samples}))
-        if (i + 1) % 10000 == 0:
-            plot_n_reconstruct(samples, cae.get_rec_state(samples))
+            #print(cae.get_code(samples))
+            #print(cae.get_code([initial_state]))
+            print(cae.rec_loss1.eval(feed_dict={cae.state: samples}))
+            print(cae.rec_loss2.eval(feed_dict={cae.state: samples}))
+        if (i) % 5000 == 0:
+            plot_n_reconstruct(samples, cae.rec_states[0].eval(feed_dict={cae.state: samples}))
+            plot_n_reconstruct(samples, cae.rec_states[1].eval(feed_dict={cae.state: samples}))
 
 if __name__ == '__main__':
     tf.app.run()
