@@ -6,7 +6,7 @@ from collections import deque
 from PIL import Image, ImageOps
 import matplotlib.pyplot as plt
 from StateCodeGenerator import SCG
-from TupleNetwork import TupleNetwork
+from TupleNetwork import TwoStageTupleNetwork as TupleNetwork
 import cv2
 import sys
 sys.path.append("game/")
@@ -29,8 +29,8 @@ REPLAY_MEMORY_SIZE = 50000
 
 BATCH_SIZE = 32
 
-CODE_SIZE = 18
-FEATURE_COUNT = 8
+CODE_SIZE = 24
+FEATURE_COUNT = 10
 WINDOW_SIZE = 4
 
 Q_LEARNING_RATE = 0.0025
@@ -54,7 +54,7 @@ def process_state(state):
 
 def main(_):
     env = Game.GameState()
-    qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT)])
+    qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT, 5), TupleNetwork(CODE_SIZE, FEATURE_COUNT, 5)])
 
     # The replay memory
     state_replay_memory = deque()
@@ -89,7 +89,7 @@ def main(_):
             action = np.random.randint(2)
             actions[action] = 1
         else:    
-            action = np.argmax([value.GetValue(state_code) for value in qValue])
+            action = np.argmax([value.GetValue(state_code, episode_reward) for value in qValue])
             actions[action] = 1
 
         next_observation, reward, done = env.frame_step(actions)
@@ -136,7 +136,7 @@ def main(_):
             if total_t % LIFE_STPES == 0:
                 rl_replay_memory.clear()
                 code_set.clear()
-                qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT), TupleNetwork(CODE_SIZE, FEATURE_COUNT)])
+                qValue = np.array([TupleNetwork(CODE_SIZE, FEATURE_COUNT, 5), TupleNetwork(CODE_SIZE, FEATURE_COUNT, 5)])
                 epsilon += (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES * CHILD_EXPLORE_STPES
                 sess.run(tf.global_variables_initializer())
                 for i in range(ENCODE_STEPS):
@@ -158,6 +158,7 @@ def main(_):
                         done_batch = [sample[3] for sample in samples]
                         next_state_batch = [sample[4] for sample in samples]
                         score_batch = [sample[5] for sample in samples]
+                        current_score_batch = [sample[6] for sample in samples]
                         state_code_batch = scg.get_code(state_batch)
                         next_state_code_batch = scg.get_code(next_state_batch)
                         average = np.mean(log)
@@ -169,17 +170,17 @@ def main(_):
                             replay_done = done_batch[i]
                             replay_next_state_code = next_state_code_batch[i]
                             if replay_done:
-                                qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)))
+                                qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)), current_score_batch[i])
                             else:
-                                next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
-                                qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
+                                next_max = GAMMA * np.max([value.GetValue(replay_next_state_code, current_score_batch[i]) for value in qValue])
+                                qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue(replay_state_code, current_score_batch[i])), current_score_batch[i])
                 heritage_replay_memory.clear()
             actions = np.zeros([2])    
             if random.random() <= epsilon:
                 action = np.random.randint(2)
                 actions[action] = 1
             else:    
-                action = np.argmax([value.GetValue(state_code) for value in qValue])
+                action = np.argmax([value.GetValue(state_code, episode_reward) for value in qValue])
                 actions[action] = 1
             
             # execute the action
@@ -188,15 +189,15 @@ def main(_):
             next_state = np.append(state[:,:,1:], np.expand_dims(next_observation, 2), axis=2)
             next_state_code = scg.get_code([next_state])[0]
             code_set.add(state_code)                   
-            episode_reward += reward
+            
 
-            episode_replay_memory.append((state_code, action, reward, done, next_state_code))
+            episode_replay_memory.append((state_code, action, reward, done, next_state_code, episode_reward))
 
             if epsilon > FINAL_EPSILON:
                 epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES
             else:
-                episode_heritage_replay_memory.append((state, action, reward, done, next_state))
-
+                episode_heritage_replay_memory.append((state, action, reward, done, next_state, episode_reward))
+            episode_reward += reward
             if len(state_replay_memory) >= REPLAY_MEMORY_SIZE:
                 state_replay_memory.popleft();
             state_replay_memory.append(next_state)
@@ -212,6 +213,7 @@ def main(_):
                 done_batch = [sample[3] for sample in samples]
                 next_state_code_batch = [sample[4] for sample in samples]
                 score_batch = [sample[5] for sample in samples]
+                current_score_batch = [sample[6] for sample in samples]
                 for i in range(4):
                     replay_state_code = state_code_batch[i]
                     replay_action = action_batch[i]
@@ -219,24 +221,24 @@ def main(_):
                     replay_done = done_batch[i]
                     replay_next_state_code = next_state_code_batch[i]
                     if replay_done:
-                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)))
+                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code, current_score_batch[i])), current_score_batch[i])
                     else:
-                        next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
-                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
+                        next_max = GAMMA * np.max([value.GetValue(replay_next_state_code, current_score_batch[i]) for value in qValue])
+                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue(replay_state_code, current_score_batch[i])), current_score_batch[i])
 
             if done:
                 average = np.mean(log)
                 deviation = np.std(log) + 0.01
                 for episode_replay in episode_replay_memory:
-                    _state_code, _action, _reward, _done, _next_state_code = episode_replay
+                    _state_code, _action, _reward, _done, _next_state_code, _current_score = episode_replay
                     if len(rl_replay_memory) >= REPLAY_MEMORY_SIZE:
                         rl_replay_memory.popleft();
-                    rl_replay_memory.append((_state_code, _action, _reward, _done, _next_state_code, episode_reward));
+                    rl_replay_memory.append((_state_code, _action, _reward, _done, _next_state_code, episode_reward, _current_score));
                 for episode_heritage_replay in episode_heritage_replay_memory:
-                    _state, _action, _reward, _done, _next_state = episode_heritage_replay
+                    _state, _action, _reward, _done, _next_state, _current_score = episode_heritage_replay
                     if len(heritage_replay_memory) >= REPLAY_MEMORY_SIZE:
                         heritage_replay_memory.popleft();
-                    heritage_replay_memory.append((_state, _action, _reward, _done, _next_state, episode_reward))
+                    heritage_replay_memory.append((_state, _action, _reward, _done, _next_state, episode_reward, _current_score))
                 
                 log.append(episode_reward)
                 if len(log) > 100:
