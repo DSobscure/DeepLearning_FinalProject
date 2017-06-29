@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{9d38d275-81dc-4579-94f3-a2dd2e47e9af}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>AtariCAE\AtariCAE.py</StartupFile>
+    <StartupFile>MCFE_TQN\FlappyBirdAgent.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -21,10 +21,25 @@
     <PtvsTargetsFile>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets</PtvsTargetsFile>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AtariCAE\AtariCAE.py" />
+    <Compile Include="AEDQN\AEDQN.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="AEDQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="AEDQN\FlappyBirdAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="AtariCAE\AtariPCAE.py" />
+    <Compile Include="AtariCAE\AtariPCAE_Single.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="AtariCAE\AtariCodeGenerator.py" />
     <Compile Include="AtariCAE\AtariGAN.py" />
     <Compile Include="AtariCAE\AtariRCG.py" />
+    <Compile Include="AtariCAE\FlappyBirdPCAE_Single.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="AtariCAE\SimpleCAE.py" />
     <Compile Include="AtariDTQN\AtariDTQN.py" />
     <Compile Include="AtariDTQN\FlappyBirdDTQN.py">
@@ -34,6 +49,30 @@
     <Compile Include="AtariDTQN\TupleFeature16bit.py" />
     <Compile Include="AtariDTQN\TupleFeature24bit.py" />
     <Compile Include="AtariDTQN\TupleNetwork.py" />
+    <Compile Include="DPCA_TQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DPCA_TQN\DPCA_StateCodeGenerator.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DPCA_TQN\FlapyBirdAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DPCA_TQN\TupleFeature16bit_FlappyBird.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DPCA_TQN\TupleFeature24bit.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DPCA_TQN\TupleFeature8bit_FlappyBird.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DPCA_TQN\TupleNetwork.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="DPCA_TQN\TupleNetwork_FlappyBird.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="FlappyBird\DeepAutoEncodedTupleQNetworkLearningFlappyBird.py" />
     <Compile Include="FlappyBird\FlappyBirdCAE.py">
       <SubType>Code</SubType>
@@ -48,6 +87,36 @@
     <Compile Include="FlappyBird\libs\dataset_utils.py" />
     <Compile Include="FlappyBird\libs\utils.py" />
     <Compile Include="FlappyBird\libs\__init__.py" />
+    <Compile Include="MCFE_TQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\FlappyBirdAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\StateCodeGenerator.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\TupleFeature24bit.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\TupleNetwork.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="RSC_DPCA_TQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="RSC_DPCA_TQN\FlappyBirdAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="RSC_DPCA_TQN\StateCodeGenerator.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="RSC_DPCA_TQN\TupleFeature24bit.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="RSC_DPCA_TQN\TupleNetwork.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="SimpleDTQN\BreakoutAgent.py" />
     <Compile Include="SimpleDTQN\RawBreakoutAgent.py">
       <SubType>Code</SubType>
@@ -92,6 +161,10 @@
     <Folder Include="FlappyBird" />
     <Folder Include="FlappyBird\game" />
     <Folder Include="FlappyBird\libs" />
+    <Folder Include="DPCA_TQN\" />
+    <Folder Include="AEDQN\" />
+    <Folder Include="MCFE_TQN\" />
+    <Folder Include="RSC_DPCA_TQN\" />
     <Folder Include="SimpleDTQN\" />
     <Folder Include="TDQN\" />
     <Folder Include="TestEnvironment" />

@@ -18,7 +18,8 @@ INIT_REPLAY_MEMORY_SIZE = 10000
 REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
-CODE_SIZE = 12
+CODE_SIZE = 8
+CODE_LEVEL = 2
 
 def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
 
@@ -51,7 +52,8 @@ def batch_norm(x):
 
 class CAE():
     def __init__(self):
-        self.encode_level = 2
+        self.encode_level = CODE_LEVEL
+        self.code_size = CODE_SIZE
         self.state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='state')
         self.original_states = [self.state]
         self.rec_states = []
@@ -61,15 +63,35 @@ class CAE():
             self.rec_states.append(rec_state)
             self.codes.append(code)
             self.original_states.append(self.original_states[i] - rec_state)
+        self.rec_loss = []
+        self.code_loss = []
+        for i in range(self.encode_level):
+            self.rec_loss.append(tf.reduce_mean(tf.pow(self.rec_states[i] - self.original_states[i], 2)))
+            self.code_loss.append(tf.reduce_mean(tf.pow(self.codes[i] - tf.random_uniform(shape = [self.code_size],minval=-1,maxval=1), 2)))
+            print('build loss', i)
+        self.optimize = []
+        for i in range(self.encode_level):
+            self.optimize.append(tf.train.RMSPropOptimizer(0.00025).minimize(self.rec_loss[i] + self.code_loss[i]))
+            print('build optimize', i)
+        #self.rec_states = []
+        #self.codes = []
+        #for i in range(self.encode_level):
+        #    rec_state, code = self.build_network(self.state, trainable=True)  
+        #    self.rec_states.append(rec_state)
+        #    self.codes.append(code)
+        self.rec_state = sum(self.rec_states)
+        #print(self.rec_state.get_shape())
+        #self.rec_loss = tf.reduce_mean(tf.pow(self.rec_state - self.state, 2))
+        #self.code_loss = []
+        #for i in range(self.encode_level):
+        #    self.code_loss.append(-tf.reduce_mean(tf.pow(self.codes[i], 2)))
+        #self.code_loss_sum = sum(self.code_loss)
+        #self.optimize = [tf.train.RMSPropOptimizer(0.00025).minimize(self.rec_loss + self.code_loss_sum)]
         
-        self.rec_loss1 = tf.reduce_mean(tf.pow(self.rec_states[0] - self.original_states[0], 2))
-        self.rec_loss2 = tf.reduce_mean(tf.pow(self.rec_states[1] - self.original_states[1], 2))
+        ##for i in range(self.encode_level):
+        ##    self.optimize.append(tf.train.RMSPropOptimizer(0.001).minimize(self.code_loss[i]))
+        ##    print('build code optimize', i)
         
-        self.optimize1 = tf.train.RMSPropOptimizer(0.001).minimize(self.rec_loss1)  
-        self.optimize2 = tf.train.RMSPropOptimizer(0.001).minimize(self.rec_loss2)  
-
-        self.rec_state =  self.rec_states[0] + self.rec_states[1]
-        print(self.rec_state.get_shape())
 
     def build_network(self, x, trainable=True):
         conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 1, 16], stddev = 0.02), trainable = trainable)
@@ -97,8 +119,8 @@ class CAE():
         fc1_hidden_bn = batch_norm(fc1_hidden_sum)
         fc1_hidden = tf.nn.elu(fc1_hidden_bn)
 
-        fc2_weight = tf.Variable(tf.truncated_normal([512, CODE_SIZE], stddev = 0.02), trainable = trainable)
-        fc2_bias = tf.Variable(tf.constant(0.02, shape = [CODE_SIZE]), trainable = trainable)      
+        fc2_weight = tf.Variable(tf.truncated_normal([512, self.code_size], stddev = 0.02), trainable = trainable)
+        fc2_bias = tf.Variable(tf.constant(0.02, shape = [self.code_size]), trainable = trainable)      
         fc2_hidden_sum = tf.matmul(fc1_hidden, fc2_weight) + fc2_bias
         fc2_hidden_bn = batch_norm(fc2_hidden_sum)
         fc2_hidden = tf.nn.tanh(fc2_hidden_bn)
@@ -106,13 +128,11 @@ class CAE():
         code_layer = fc2_hidden
         print("code layer shape : %s" % code_layer.get_shape())
 
-        dfc1_weight = tf.Variable(tf.truncated_normal([CODE_SIZE, 512], stddev = 0.02))
+        dfc1_weight = tf.Variable(tf.truncated_normal([self.code_size, 512], stddev = 0.02))
         dfc1_bias = tf.Variable(tf.constant(0.02, shape = [512]))
         dfc1_hidden_sum = tf.matmul(fc2_hidden, dfc1_weight) + dfc1_bias
         dfc1_hidden_bn = batch_norm(dfc1_hidden_sum)
         dfc1_hidden = tf.nn.elu(dfc1_hidden_bn)
-
-        print("dcode layer shape : %s" % dfc1_hidden.get_shape())
 
         dfc2_weight = tf.Variable(tf.truncated_normal([512, 11*11*32], stddev = 0.02))
         dfc2_bias = tf.Variable(tf.constant(0.02, shape = [11*11*32]))
@@ -143,23 +163,21 @@ class CAE():
         return dconv3_hidden_sum, code_layer
 
     def update_code(self, sess, state):
-        sess.run([self.optimize1, self.optimize2], feed_dict={self.state : state})
+        sess.run(self.optimize, feed_dict={self.state : state})
 
     def get_code(self, state):
-        code0 = self.codes[0].eval(feed_dict={self.state: state})
-        code1 = self.codes[1].eval(feed_dict={self.state: state})
+        codes = []
+        for i in range(self.encode_level):
+            codes.append(self.codes[i].eval(feed_dict={self.state: state}))
         result = []
         
         for i in range(len(state)):
             number = 0
-            for j in range(CODE_SIZE):
-                number *= 2
-                if code0[i][j] > 0:
-                    number += 1
-            for j in range(CODE_SIZE):
-                number *= 2
-                if code1[i][j] > 0:
-                    number += 1
+            for c in range(self.encode_level):
+                for j in range(CODE_SIZE):
+                    number *= 2
+                    if codes[c][i][j] > 0:
+                        number += 1
             result.append(number)
         return result
 
@@ -197,7 +215,7 @@ def main(_):
         next_observation, reward, done, _ = env.step(action)
         next_observation = process_state(next_observation)
         next_state = next_observation
-        replay_memory.append(state)
+        replay_memory.append(next_state - state)
 
         episode_reward += reward
 
@@ -220,11 +238,13 @@ def main(_):
             print("generate code...", i)
             print(cae.get_code(samples))
             print(cae.get_code([initial_state]))
-            print(cae.rec_loss1.eval(feed_dict={cae.state: samples}))
-            print(cae.rec_loss2.eval(feed_dict={cae.state: samples}))
+            for c in range(CODE_LEVEL):
+                print(cae.rec_loss[c].eval(feed_dict={cae.state: samples}))
+                print(cae.code_loss[c].eval(feed_dict={cae.state: samples}))
+                
         if (i) % 10000 == 0:
-            plot_n_reconstruct(samples, cae.rec_states[0].eval(feed_dict={cae.state: samples}))
-            plot_n_reconstruct(samples, cae.rec_states[1].eval(feed_dict={cae.state: samples}))
+            #for c in range(CODE_LEVEL):
+            #    plot_n_reconstruct(samples, cae.rec_states[c].eval(feed_dict={cae.state: samples}))
             plot_n_reconstruct(samples, cae.get_rec_state(samples))
 
 if __name__ == '__main__':
