@@ -1,11 +1,9 @@
 import itertools
 import numpy as np
-import os
 import random
 import sys
 import tensorflow as tf
 from collections import deque
-from PIL import Image, ImageOps
 from TDQN import TDQN
 from TupleNetwork import TupleNetwork
 import cv2

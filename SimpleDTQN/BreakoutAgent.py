@@ -4,7 +4,6 @@ import random
 import tensorflow as tf
 from collections import deque
 from PIL import Image, ImageOps
-import matplotlib.pyplot as plt
 from StateCodeGenerator import SCG
 from TupleNetwork import TupleNetwork
 import gym
