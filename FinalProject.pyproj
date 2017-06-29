@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{9d38d275-81dc-4579-94f3-a2dd2e47e9af}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>RSC_DPCA_TQN\FlappyBirdAgent.py</StartupFile>
+    <StartupFile>MCFE_TQN\FlappyBirdAgent.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -87,6 +87,21 @@
     <Compile Include="FlappyBird\libs\dataset_utils.py" />
     <Compile Include="FlappyBird\libs\utils.py" />
     <Compile Include="FlappyBird\libs\__init__.py" />
+    <Compile Include="MCFE_TQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\FlappyBirdAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\StateCodeGenerator.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\TupleFeature24bit.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="MCFE_TQN\TupleNetwork.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="RSC_DPCA_TQN\BreakoutAgent.py">
       <SubType>Code</SubType>
     </Compile>
@@ -148,6 +163,7 @@
     <Folder Include="FlappyBird\libs" />
     <Folder Include="DPCA_TQN\" />
     <Folder Include="AEDQN\" />
+    <Folder Include="MCFE_TQN\" />
     <Folder Include="RSC_DPCA_TQN\" />
     <Folder Include="SimpleDTQN\" />
     <Folder Include="TDQN\" />
