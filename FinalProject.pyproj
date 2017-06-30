@@ -96,7 +96,7 @@
     <Compile Include="MCFE_TQN\StateCodeGenerator.py">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="MCFE_TQN\TupleFeature24bit.py">
+    <Compile Include="MCFE_TQN\TupleFeature.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="MCFE_TQN\TupleNetwork.py">

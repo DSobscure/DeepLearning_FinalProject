@@ -4,20 +4,21 @@ class SCG():
     def __init__(self, code_size):
         self.code_size = code_size
 
-        self.pre2_state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='pre2_state')
+        #self.pre2_state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='pre2_state')
         self.pre1_state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='pre1_state')
         self.current_state = tf.placeholder(shape=[None, 84, 84, 1], dtype=tf.float32, name='current_state')
+        self.random_code = tf.placeholder(shape=[None, self.code_size], dtype=tf.float32, name='random_code')
 
-        self.diff2_code = self.build_network(self.pre1_state - self.pre2_state, trainable=True)   
+        #self.diff2_code = self.build_network(self.pre1_state - self.pre2_state, trainable=True)   
         self.diff1_code = self.build_network(self.current_state - self.pre1_state, trainable=True)   
         self.current_code = self.build_network(self.current_state, trainable=True)            
 
-        self.diff2_code_loss = tf.reduce_mean(tf.pow(self.diff2_code - tf.random_uniform(shape = [self.code_size],minval=-1,maxval=1), 2))
-        self.diff1_code_loss = tf.reduce_mean(tf.pow(self.diff1_code - tf.random_uniform(shape = [self.code_size],minval=-1,maxval=1), 2))
-        self.current_code_loss = tf.reduce_mean(tf.pow(self.current_code - tf.random_uniform(shape = [self.code_size],minval=-1,maxval=1), 2))
+        #self.diff2_code_loss = tf.reduce_mean(tf.pow(self.diff2_code - self.random_code, 2))
+        self.diff1_code_loss = tf.reduce_mean(tf.pow(self.diff1_code - self.random_code, 2))
+        self.current_code_loss = tf.reduce_mean(tf.pow(self.current_code - self.random_code, 2))
 
         self.optimize = []
-        self.optimize.append(tf.train.RMSPropOptimizer(0.00025).minimize(self.diff2_code_loss))
+        #self.optimize.append(tf.train.RMSPropOptimizer(0.00025).minimize(self.diff2_code_loss))
         self.optimize.append(tf.train.RMSPropOptimizer(0.00025).minimize(self.diff1_code_loss))
         self.optimize.append(tf.train.RMSPropOptimizer(0.00025).minimize(self.current_code_loss))
 
@@ -46,44 +47,53 @@ class SCG():
         fc2_weight = tf.Variable(tf.truncated_normal([512, self.code_size], stddev = 0.02), trainable = trainable)
         fc2_bias = tf.Variable(tf.constant(0.02, shape = [self.code_size]), trainable = trainable)      
         fc2_hidden_sum = tf.matmul(fc1_hidden, fc2_weight) + fc2_bias
-        fc2_hidden = tf.nn.tanh(fc2_hidden_sum)
+        fc2_hidden = tf.nn.sigmoid(fc2_hidden_sum)
 
         code_layer = fc2_hidden
         print("code layer shape : %s" % code_layer.get_shape())
 
         return code_layer
 
-    def update_code(self, sess, state):
-        pre2_state = [x[0] for x in state]
-        pre1_state = [x[1] for x in state]
-        current_state = [x[2] for x in state]
-        sess.run(self.optimize, feed_dict={self.pre2_state: pre2_state, self.pre1_state: pre1_state, self.current_state: current_state})
+    def update_code(self, sess, state, random_code):
+        #pre2_state = [x[0] for x in state]
+        pre1_state = [x[0] for x in state]
+        current_state = [x[1] for x in state]
+        sess.run(self.optimize, feed_dict={self.pre1_state: pre1_state, self.current_state: current_state, self.random_code: random_code})
 
     def get_code(self, state):
-        pre2_state = [x[0] for x in state]
-        pre1_state = [x[1] for x in state]
-        current_state = [x[2] for x in state]
+        #pre2_state = [x[0] for x in state]
+        pre1_state = [x[0] for x in state]
+        current_state = [x[1] for x in state]
 
-        diff2_code = self.diff2_code.eval(feed_dict={self.pre2_state: pre2_state, self.pre1_state: pre1_state})
+        #diff2_code = self.diff2_code.eval(feed_dict={self.pre2_state: pre2_state, self.pre1_state: pre1_state})
         diff1_code = self.diff1_code.eval(feed_dict={self.pre1_state: pre1_state, self.current_state: current_state})
         current_code = self.current_code.eval(feed_dict={self.current_state: current_state})
         
         result = []
         for i in range(len(state)):
             number = 0
+            #for j in range(self.code_size):
+            #    number *= 2
+            #    if diff2_code[i][j] > 0.5:
+            #        number += 1
             for j in range(self.code_size):
                 number *= 2
-                if diff2_code[i][j] > 0:
+                if diff1_code[i][j] > 0.5:
                     number += 1
             for j in range(self.code_size):
                 number *= 2
-                if diff1_code[i][j] > 0:
-                    number += 1
-            for j in range(self.code_size):
-                number *= 2
-                if current_code[i][j] > 0:
+                if current_code[i][j] > 0.5:
                     number += 1
             result.append(number)
         return result
+    def print_loss(self, state, random_code):
+        #pre2_state = [x[0] for x in state]
+        pre1_state = [x[0] for x in state]
+        current_state = [x[1] for x in state]
 
+        #diff2_code = self.diff2_code.eval(feed_dict={self.pre2_state: pre2_state, self.pre1_state: pre1_state})
+        diff1_code_loss = self.diff1_code_loss.eval(feed_dict={self.pre1_state: pre1_state, self.current_state: current_state, self.random_code: random_code})
+        current_code_loss = self.current_code_loss.eval(feed_dict={self.current_state: current_state, self.random_code: random_code})
+        print('diff1_code_loss: ', diff1_code_loss)
+        print('current_code_loss: ', current_code_loss)
 

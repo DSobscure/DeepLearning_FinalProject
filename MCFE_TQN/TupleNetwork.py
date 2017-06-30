@@ -1,15 +1,14 @@
-from TupleFeature24bit import TupleFeature24bit
+from TupleFeature import TupleFeature
 
 class TupleNetwork(object):
     def __init__(self):
         self.featureSet = []
-        self.featureSet.append(TupleFeature24bit(1))
-        self.featureSet.append(TupleFeature24bit(2))
-        self.featureSet.append(TupleFeature24bit(3))
-        self.featureSet.append(TupleFeature24bit(4))
-        self.featureSet.append(TupleFeature24bit(5))
-        self.featureSet.append(TupleFeature24bit(6))
-        self.featureSet.append(TupleFeature24bit(7))
+        self.featureSet.append(TupleFeature(1))
+        self.featureSet.append(TupleFeature(2))
+        self.featureSet.append(TupleFeature(3))
+        self.featureSet.append(TupleFeature(4))
+        self.featureSet.append(TupleFeature(5))
+        self.featureSet.append(TupleFeature(6))
     
     def GetValue(self, rawBoard):
         sum = 0;
