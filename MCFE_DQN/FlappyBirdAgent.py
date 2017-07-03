@@ -16,7 +16,7 @@ GAMMA = 0.99
 
 INITIAL_EPSILON = 0.2
 FINAL_EPSILON = 0.0001
-EXPLORE_STPES = 200000
+EXPLORE_STPES = 100000
 ENCODING_STPES = 50000
 INITIAL_LIFE_STPES = 400000
 LIFE_STPES_INCREASE_FACTOR = 5
@@ -26,7 +26,7 @@ INIT_REPLAY_MEMORY_SIZE =10000
 REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
-CODE_SIZE = 32
+CODE_SIZE = 16
 
 TN_Q_LEARNING_RATE = 0.01
 
@@ -162,7 +162,6 @@ def main(_):
                 action = np.random.randint(2)
             else:    
                 if episode % 2 == 0:
-                    
                     action = np.argmax([value.GetValue(state_code) for value in qValue])
                 else:
                     action = dqn.select_action(state)
@@ -215,7 +214,7 @@ def main(_):
             if total_t % 10000 == 0:
                 dqn.update_target_network(sess)
 
-            if done or t > 5000:     
+            if done or t > 10000:     
                 average = np.mean(log)
                 deviation = np.std(log) + 0.01
                 for episode_replay in episode_replay_memory:

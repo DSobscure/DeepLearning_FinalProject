@@ -4,13 +4,6 @@ class TupleNetwork(object):
     def __init__(self):
         self.featureSet = []
         self.featureSet.append(TupleFeature(1))
-        self.featureSet.append(TupleFeature(2))
-        self.featureSet.append(TupleFeature(3))
-        self.featureSet.append(TupleFeature(4))
-        self.featureSet.append(TupleFeature(5))
-        self.featureSet.append(TupleFeature(6))
-        self.featureSet.append(TupleFeature(7))
-        self.featureSet.append(TupleFeature(8))
     
     def GetValue(self, rawBoard):
         sum = 0;
