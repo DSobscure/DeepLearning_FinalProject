@@ -1,10 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-def batch_norm(x):
-    return tf.contrib.layers.batch_norm(x, center=True, scale=True, is_training=True)
-
-class AEDQN():
+class DQN():
     def __init__(self, gamma, action_number):
         self.action_number = action_number
         
@@ -14,8 +11,8 @@ class AEDQN():
         self.reward = tf.placeholder(tf.float32, shape=[None, 1], name='reward')
         self.terminal_mask = tf.placeholder(tf.float32, shape=[None, 1], name='terminal_mask')
             
-        self.beheavior_output, self.beheavior_reconstruct_state, self.beheavior_model = self.build_network(self.state, trainable=True)
-        self.target_output, self.target_reconstruct_state, self.target_model = self.build_network(self.next_state, trainable=False)            
+        self.beheavior_output, self.beheavior_model = self.build_network(self.state, trainable=True)
+        self.target_output, self.target_model = self.build_network(self.next_state, trainable=False)            
         
         action_mask = tf.one_hot(self.action, self.action_number, name='action_mask')
         action_mask = tf.reshape(action_mask, (-1, self.action_number))
@@ -25,10 +22,9 @@ class AEDQN():
         max_next_q = tf.reshape(max_next_q, (-1, 1))
         self.delta = self.reward + self.terminal_mask * gamma * max_next_q - masked_q
 
-        self.loss = tf.reduce_mean(tf.square(self.delta), name='loss')     
-        self.reconstruct_loss = tf.reduce_mean(tf.pow(self.beheavior_reconstruct_state - self.state, 2))
-        self.optimize_q = tf.train.RMSPropOptimizer(0.00025).minimize(self.loss)
-        self.optimize_reconstruct = tf.train.RMSPropOptimizer(0.00025).minimize(self.reconstruct_loss)
+        self.loss = tf.reduce_mean(tf.square(self.delta), name='loss')            
+        self.optimize = tf.train.RMSPropOptimizer(0.00025).minimize(self.loss)   
+
 
     def build_network(self, x, trainable=True):
         conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
@@ -52,11 +48,6 @@ class AEDQN():
         linear_bias = tf.Variable(tf.constant(0.02, shape = [self.action_number]), trainable = trainable)
         outputs = tf.matmul(fc1_hidden, linear_weight) + linear_bias
 
-        dconv3_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
-        dconv3_bias = tf.Variable(tf.constant(0.02, shape = [4]), trainable = trainable)
-        dconv3_output_shape = tf.stack([tf.shape(x)[0], 84, 84, 4])
-        dconv3_hidden_sum = tf.nn.conv2d_transpose(conv1_hidden, dconv3_weight, dconv3_output_shape, strides = [1,4,4,1], padding='SAME') + dconv3_bias
-
         variables = {
             'conv1_weight' : conv1_weight,
             'conv1_bias' : conv1_bias,
@@ -67,11 +58,9 @@ class AEDQN():
             'fc1_weight' : fc1_weight,
             'fc1_bias' : fc1_bias,
             'linear_weight' : linear_weight,
-            'linear_bias' : linear_bias,
-            'dconv3_weight' : dconv3_weight,
-            'dconv3_bias' : dconv3_bias,
+            'linear_bias' : linear_bias
         }
-        return outputs, dconv3_hidden_sum, variables
+        return outputs, variables
 
     def get_values(self, state):
         return self.beheavior_output.eval(feed_dict={self.state : state})
@@ -87,13 +76,13 @@ class AEDQN():
 
         terminal_mask = np.invert(terminal) * 1
 
-        loss, reconstruct_loss, _, _ = sess.run([self.loss, self.reconstruct_loss, self.optimize_q, self.optimize_reconstruct], feed_dict={
+        loss, _ = sess.run([self.loss, self.optimize], feed_dict={
             self.state : state,
             self.next_state : next_state,
             self.action : action,
             self.reward : reward,
             self.terminal_mask : terminal_mask})
-        return loss, reconstruct_loss
+        return loss
 
     def update_target_network(self, sess):
         updates = []
