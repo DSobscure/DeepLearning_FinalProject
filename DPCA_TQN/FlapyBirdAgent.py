@@ -29,7 +29,7 @@ BATCH_SIZE = 32
 
 CODE_SIZE = 12
 CODE_LEVEL = 2
-WINDOW_SIZE = 4
+WINDOW_SIZE = 2
 
 Q_LEARNING_RATE = 0.0025
 
@@ -150,6 +150,9 @@ def main(_):
             
             next_observation, reward, done = env.frame_step(actions)
             next_observation = process_state(next_observation)
+            state_replay_memory.append(next_observation)
+            if len(state_replay_memory) >= REPLAY_MEMORY_SIZE:
+                state_replay_memory.popleft();
             next_state = np.array([state[1], state[2], state[3], next_observation])
             next_state_code = scg.get_code([next_state])[0]
             episode_reward += reward
