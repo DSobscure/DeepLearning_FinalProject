@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{9d38d275-81dc-4579-94f3-a2dd2e47e9af}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>AEDQN\FlappyBirdAgent.py</StartupFile>
+    <StartupFile>MCFE_DQN\FlappyBirdAgent.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -87,9 +87,6 @@
     <Compile Include="FlappyBird\libs\dataset_utils.py" />
     <Compile Include="FlappyBird\libs\utils.py" />
     <Compile Include="FlappyBird\libs\__init__.py" />
-    <Compile Include="MCFE_DQN\BreakoutAgent.py">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="MCFE_DQN\DQN.py">
       <SubType>Code</SubType>
     </Compile>

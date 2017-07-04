@@ -26,9 +26,9 @@ INIT_REPLAY_MEMORY_SIZE =10000
 REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
-CODE_SIZE = 16
+CODE_SIZE = 32
 
-TN_Q_LEARNING_RATE = 0.01
+TN_Q_LEARNING_RATE = 0.0025
 
 def elu(value):
     if value >= 0:
@@ -161,10 +161,7 @@ def main(_):
             if random.random() <= epsilon:
                 action = np.random.randint(2)
             else:    
-                if episode % 2 == 0:
-                    action = np.argmax([value.GetValue(state_code) for value in qValue])
-                else:
-                    action = dqn.select_action(state)
+                action = np.argmax(dqn.get_values([state])[0] + [value.GetValue(state_code) for value in qValue])
             actions[action] = 1
             
             next_observation, reward, done = env.frame_step(actions)
@@ -185,11 +182,11 @@ def main(_):
                 reward_batch = [sample[2] for sample in samples]
                 done_batch = [sample[3] for sample in samples]
                 next_state_batch = [sample[4] for sample in samples]
-
-                dqn_loss = dqn.update(sess, state_batch, action_batch, reward_batch, done_batch, next_state_batch)
-
+                
                 state_code_batch = scg.get_code(state_batch)
                 next_state_code_batch = scg.get_code(next_state_batch)
+
+                dqn_loss = dqn.update(sess, state_batch, action_batch, reward_batch, done_batch, next_state_batch)               
 
                 tn_q_loss_sum = 0
                 for i in range(BATCH_SIZE):
