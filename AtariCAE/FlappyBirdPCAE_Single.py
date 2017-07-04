@@ -21,8 +21,8 @@ INIT_REPLAY_MEMORY_SIZE = 10000
 REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
-CODE_SIZE = 8
-CODE_LEVEL = 1
+CODE_SIZE = 12
+CODE_LEVEL = 2
 
 def plot_n_reconstruct(origin_img, reconstruct_img, n = 10):
 
@@ -70,12 +70,12 @@ class CAE():
         for i in range(self.encode_level):
             rec_states = sum(self.rec_states[i:])
             self.rec_loss.append(tf.reduce_mean(tf.pow(rec_states - self.original_states[i], 2)))
-            self.code_loss.append(tf.pow(self.codes[i] - tf.random_uniform(shape = [self.code_size],minval=-1,maxval=1), 2))
+            self.code_loss.append(-tf.reduce_mean(tf.pow(self.codes[i], 2)))
             print('build loss', i)
         self.optimize = []
         for i in range(self.encode_level):
             self.optimize.append(tf.train.RMSPropOptimizer(0.001).minimize(self.rec_loss[i]))
-            self.optimize.append(tf.train.RMSPropOptimizer(0.00025).minimize(self.code_loss[i]))
+            #self.optimize.append(tf.train.RMSPropOptimizer(0.001).minimize(self.code_loss[i]))
             print('build optimize', i)
         self.rec_state = sum(self.rec_states)
         print(self.rec_state.get_shape())
@@ -239,9 +239,10 @@ def main(_):
             print(cae.get_code([initial_state]))
             for c in range(CODE_LEVEL):
                 print(cae.rec_loss[c].eval(feed_dict={cae.state: samples}))
+                print(cae.code_loss[c].eval(feed_dict={cae.state: samples}))
         if (i) % 10000 == 0:
-            for c in range(CODE_LEVEL):
-                plot_n_reconstruct(samples, cae.rec_states[c].eval(feed_dict={cae.state: samples}))
+            #for c in range(CODE_LEVEL):
+            #    plot_n_reconstruct(samples, cae.rec_states[c].eval(feed_dict={cae.state: samples}))
             plot_n_reconstruct(samples, cae.get_rec_state(samples))
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{9d38d275-81dc-4579-94f3-a2dd2e47e9af}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>MCFE_TQN\FlappyBirdAgent.py</StartupFile>
+    <StartupFile>DPCA_TQN\FlapyBirdAgent.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -49,28 +49,16 @@
     <Compile Include="AtariDTQN\TupleFeature16bit.py" />
     <Compile Include="AtariDTQN\TupleFeature24bit.py" />
     <Compile Include="AtariDTQN\TupleNetwork.py" />
-    <Compile Include="DPCA_TQN\BreakoutAgent.py">
-      <SubType>Code</SubType>
-    </Compile>
     <Compile Include="DPCA_TQN\DPCA_StateCodeGenerator.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DPCA_TQN\FlapyBirdAgent.py">
       <SubType>Code</SubType>
     </Compile>
-    <Compile Include="DPCA_TQN\TupleFeature16bit_FlappyBird.py">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="DPCA_TQN\TupleFeature24bit.py">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="DPCA_TQN\TupleFeature8bit_FlappyBird.py">
+    <Compile Include="DPCA_TQN\TupleFeature.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="DPCA_TQN\TupleNetwork.py">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Include="DPCA_TQN\TupleNetwork_FlappyBird.py">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="FlappyBird\DeepAutoEncodedTupleQNetworkLearningFlappyBird.py" />

@@ -19,13 +19,16 @@ class DPCA_SCG():
             self.codes.append(code)
             self.original_states.append(self.original_states[i] - rec_state)
         self.rec_loss = []
+        self.code_loss = []
         for i in range(self.code_level):
             rec_states = sum(self.rec_states[i:])
             self.rec_loss.append(tf.reduce_mean(tf.pow(rec_states - self.original_states[i], 2)))
+            self.code_loss.append(-tf.reduce_mean(tf.pow(self.codes[i], 2)))
             print('build loss', i)
         self.optimize = []
         for i in range(self.code_level):
             self.optimize.append(tf.train.RMSPropOptimizer(0.001).minimize(self.rec_loss[i]))
+            self.optimize.append(tf.train.RMSPropOptimizer(0.001).minimize(self.code_loss[i]))
             print('build optimize', i)
         self.rec_state = sum(self.rec_states)
         print(self.rec_state.get_shape())
@@ -100,15 +103,8 @@ class DPCA_SCG():
         return dconv3_hidden_sum, code_layer
 
     def update_code(self, sess, state):
-        batch_size = len(state)
-        state = np.array(state)
-        state = state.reshape([batch_size * self.window_size, 84, 84, 1])
         sess.run(self.optimize, feed_dict={self.state : state})
-    def get_loss(self, state):
-        batch_size = len(state)
-        state = np.array(state)
-        state = state.reshape([batch_size * self.window_size, 84, 84, 1])
-        return self.rec_loss[0].eval(feed_dict={self.state: state})
+
     def get_code(self, state):
         batch_size = len(state)
         #state:
