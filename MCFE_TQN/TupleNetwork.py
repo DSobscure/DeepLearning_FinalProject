@@ -12,14 +12,14 @@ class TupleNetwork(object):
     
     def GetValue(self, raw_state):
         sum = 0;
-        for i in range(3):
+        for i in range(1):
             state = (raw_state >> (i * 24)) & 0xFFFFFFFFFFFF
             for j in range(len(self.featureSet)):
                 sum += self.featureSet[j].GetScore(state)
         return sum
 
     def UpdateValue(self, raw_state, delta):
-        for i in range(3):
+        for i in range(1):
             state = (raw_state >> (i * 24)) & 0xFFFFFFFFFFFF
             for j in range(len(self.featureSet)):
                 self.featureSet[j].UpdateScore(state, delta)

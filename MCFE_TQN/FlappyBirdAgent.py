@@ -3,31 +3,31 @@ import numpy as np
 import random
 import tensorflow as tf
 from collections import deque
-from PIL import Image, ImageOps
-import sys
-import math
 from StateCodeGenerator import SCG
 from TupleNetwork import TupleNetwork
+import cv2
+import sys
 sys.path.append("game/")
 import wrapped_flappy_bird as Game
+import math
 
 GAMMA = 0.99
 
 INITIAL_EPSILON = 0.2
-FINAL_EPSILON = 0.001
-EXPLORE_STPES = 500000
-ENCODING_STPES = 40000
+FINAL_EPSILON = 0.0001
+EXPLORE_STPES = 250000
+ENCODING_STEPS = 50000
 INITIAL_LIFE_STPES = 500000
-LIFE_STPES_INCREASE_FACTOR = 5
+LIFE_STPES_INCREASE_FACTOR = 10
 
-# replay memory
-INIT_REPLAY_MEMORY_SIZE =10000
+INIT_REPLAY_MEMORY_SIZE = 10000
 REPLAY_MEMORY_SIZE = 100000
 
 BATCH_SIZE = 32
+
 CODE_SIZE = 24
 
-TN_Q_LEARNING_RATE = 0.0025
+Q_LEARNING_RATE = 0.0025
 
 def elu(value):
     if value >= 0:
@@ -41,79 +41,64 @@ def inverse_elu(value):
     else:
         return -math.exp(-value) + 1
 
-def random_code(seed):
+def random_code():
     result = np.zeros(CODE_SIZE)
-    block_mask_index = np.random.randint(int(CODE_SIZE / 4))
     for i in range(CODE_SIZE):
-        if block_mask_index * 4 <=  i and i < (block_mask_index + 1) * 4:
-            result[i] = np.random.randint(2)
-        else:
-            result[i] = seed[i]
+        result[i] = np.random.randint(2)
     return result
 
 def process_state(state):
-    state = Image.fromarray(state)
-    state = ImageOps.fit(state, (84,84), centering=(0.5,0.7))
-    state = state.convert('L')      
+    state = cv2.cvtColor(cv2.resize(state, (84, 84)), cv2.COLOR_BGR2GRAY)
+    _, state = cv2.threshold(state, 1, 255, cv2.THRESH_BINARY)
     return np.array(state).reshape([84,84,1])
+
+def get_initial_state(env):
+    observation = Game.GameState()
+    do_nothing = np.zeros(2)
+    do_nothing[0] = 1
+    observation, _, _ = env.frame_step(do_nothing)
+    return observation
 
 def main(_):
     env = Game.GameState()
-    qValue = np.array([TupleNetwork(), TupleNetwork()])
     scg = SCG(CODE_SIZE)
+    qValue = np.array([TupleNetwork(), TupleNetwork()])
 
     state_replay_memory = deque()
     rl_replay_memory = deque()
+    heritage_replay_memory = deque()
     log = deque()
     code_set = set()
 
     sess = tf.InteractiveSession()
     sess.run(tf.global_variables_initializer())
+    saver = tf.train.Saver(max_to_keep=1000)
 
+    episode_reward = 0    
     epsilon = INITIAL_EPSILON
-    total_t = 0
     life_steps = INITIAL_LIFE_STPES
 
-    episode_reward = 0
-    observation = Game.GameState()
-    do_nothing = np.zeros(2)
-    do_nothing[0] = 1
-    observation, _, _ = env.frame_step(do_nothing)                       # retrive first env image
-    observation = process_state(observation)        # process the image
-    state = np.stack([observation] * 4)
-    code_seed = np.zeros(CODE_SIZE)
-
-    state_replay_memory.append((observation, code_seed))
-    code_seed = random_code(code_seed)
+    observation = process_state(get_initial_state(env))
+    state = np.stack([observation] * 2)
 
     while len(state_replay_memory) < INIT_REPLAY_MEMORY_SIZE:
         actions = np.zeros([2])
         if random.random() <= epsilon:
             action = np.random.randint(2)
-            actions[action] = 1
         else:    
             action = 0
-            actions[action] = 1
+        actions[action] = 1      
 
         next_observation, reward, done = env.frame_step(actions)
         next_observation = process_state(next_observation)
-        next_state = np.array([state[1], state[2], state[3], next_observation])
-        
-        state_replay_memory.append((next_observation, code_seed))
-        code_seed = random_code(code_seed)       
-
+        next_state = np.array([state[1], next_observation])
+        state_replay_memory.append((state, random_code()))
         episode_reward += reward
-        
-        # Current game episode is over
+
         if done:
-            observation = Game.GameState()
-            do_nothing = np.zeros(2)
-            do_nothing[0] = 1
-            observation, _, _ = env.frame_step(do_nothing)                 # retrive first env image
-            observation = process_state(observation)
-            state = np.stack([observation] * 4)
-            state_replay_memory.append((observation, code_seed))
-            code_seed = random_code(code_seed)
+            observation = process_state(get_initial_state(env))
+            state = np.stack([observation] * 2)
+
             log.append(episode_reward)
             if len(log) > 100:
                 log.popleft()
@@ -122,74 +107,76 @@ def main(_):
         else:
             state = next_state
 
-    for i in range(ENCODING_STPES):
+    for i in range(ENCODING_STEPS):
         samples = random.sample(state_replay_memory, BATCH_SIZE)
         state_batch = [sample[0] for sample in samples]
         random_code_batch = [sample[1] for sample in samples]
-        code_loss = scg.update_code(sess, state_batch, random_code_batch)
+        code_loss, difference_code_loss = scg.update_code(sess, state_batch, random_code_batch)
         if i % 1000 == 0:
             print("generate code...", i)
             print("code loss: ", code_loss)
+            print("difference code loss: ", difference_code_loss)
 
+    total_t = 0
     for episode in range(1000000):
-        observation = Game.GameState()
-        do_nothing = np.zeros(2)
-        do_nothing[0] = 1
-        observation, _, _ = env.frame_step(do_nothing)
-        observation = process_state(observation)
-        state = np.stack([observation] * 4)
-        state_code = scg.get_code([state])[0]
-        code_seed = np.zeros(CODE_SIZE)
-
-        state_replay_memory.append((observation, code_seed))
-        code_seed = random_code(code_seed)
         episode_reward = 0
         episode_replay_memory = []
+
+        observation = process_state(get_initial_state(env))
+        state = np.stack([observation] * 2)
+        state_code = scg.get_code([state])[0]
 
         for t in itertools.count():
             if total_t > life_steps:
                 code_set.clear()
-                sess.run(tf.global_variables_initializer())
+                rl_replay_memory.clear()
                 qValue = np.array([TupleNetwork(), TupleNetwork()])
+                sess.run(tf.global_variables_initializer())
                 life_steps *= LIFE_STPES_INCREASE_FACTOR
-                for i in range(ENCODING_STPES):
+                epsilon = INITIAL_EPSILON
+                for i in range(ENCODING_STEPS):
                     samples = random.sample(state_replay_memory, BATCH_SIZE)
                     state_batch = [sample[0] for sample in samples]
                     random_code_batch = [sample[1] for sample in samples]
-                    code_loss = scg.update_code(sess, state_batch, random_code_batch)
+                    code_loss, difference_code_loss = scg.update_code(sess, state_batch, random_code_batch)
                     if i % 1000 == 0:
                         print("generate code...", i)
                         print("code loss: ", code_loss)
+                        print("difference code loss: ", difference_code_loss)
 
-            actions = np.zeros([2])
             code_set.add(state_code)
+            actions = np.zeros([2])    
             if random.random() <= epsilon:
                 action = np.random.randint(2)
             else:    
                 action = np.argmax([value.GetValue(state_code) for value in qValue])
             actions[action] = 1
-            
+
             next_observation, reward, done = env.frame_step(actions)
             next_observation = process_state(next_observation)
-            next_state = np.array([state[1], state[2], state[3], next_observation])
+            next_state = np.array([state[1], next_observation])
             next_state_code = scg.get_code([next_state])[0]
             episode_reward += reward
+                               
+            episode_replay_memory.append((state_code, action, reward, done, next_state_code))
 
             if epsilon > FINAL_EPSILON:
                 epsilon -= (INITIAL_EPSILON - FINAL_EPSILON) / EXPLORE_STPES
-            
-            episode_replay_memory.append((state_code, action, reward, done, next_state_code))
-            code_seed = random_code(code_seed)
 
-            if len(rl_replay_memory) > INIT_REPLAY_MEMORY_SIZE and total_t % 8 == 0:
+            if len(state_replay_memory) >= REPLAY_MEMORY_SIZE:
+                state_replay_memory.popleft();
+            state_replay_memory.append((state, random_code()))
+            
+            if len(rl_replay_memory) > INIT_REPLAY_MEMORY_SIZE and total_t % 2 == 0:
+                if total_t % 1000 == 0:
+                    print("Code Set: ", len(code_set))
+
                 samples = random.sample(rl_replay_memory, BATCH_SIZE)
                 state_code_batch = [sample[0] for sample in samples]
                 action_batch = [sample[1] for sample in samples]
                 reward_batch = [sample[2] for sample in samples]
                 done_batch = [sample[3] for sample in samples]
-                next_state_code_batch = [sample[4] for sample in samples]            
-
-                tn_q_loss_sum = 0
+                next_state_code_batch = [sample[4] for sample in samples]
                 for i in range(BATCH_SIZE):
                     replay_state_code = state_code_batch[i]
                     replay_action = action_batch[i]
@@ -197,19 +184,12 @@ def main(_):
                     replay_done = done_batch[i]
                     replay_next_state_code = next_state_code_batch[i]
                     if replay_done:
-                        tn_q_loss = replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)
-                        qValue[replay_action].UpdateValue(replay_state_code, TN_Q_LEARNING_RATE * tn_q_loss)
+                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)))
                     else:
                         next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
-                        tn_q_loss = replay_reward + next_max - qValue[replay_action].GetValue(replay_state_code)
-                        qValue[replay_action].UpdateValue(replay_state_code, TN_Q_LEARNING_RATE * tn_q_loss)
-                    tn_q_loss_sum += abs(tn_q_loss)
+                        qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
 
-                if total_t % 1000 == 0:
-                    print("Code Set: ", len(code_set))
-                    print("tn q loss:", tn_q_loss_sum / BATCH_SIZE)           
-
-            if done or t > 10000:     
+            if done:
                 average = np.mean(log)
                 deviation = np.std(log) + 0.01
                 for episode_replay in episode_replay_memory:
@@ -218,7 +198,7 @@ def main(_):
                     if len(rl_replay_memory) >= REPLAY_MEMORY_SIZE:
                         rl_replay_memory.popleft();
                     rl_replay_memory.append((_state_code, _action, transfer_reward, _done, _next_state_code));
-                               
+                
                 log.append(episode_reward)
                 if len(log) > 100:
                     log.popleft()
