@@ -89,3 +89,60 @@ class DQN():
         for key, value in self.beheavior_model.items():
             updates.append(self.target_model[key].assign(value))
         sess.run(updates);
+
+class DRN():
+    def __init__(self):
+        self.state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state')
+        self.reward = tf.placeholder(tf.float32, shape=[None, 1], name='reward')
+            
+        self.beheavior_output, self.beheavior_model = self.build_network(self.state, trainable=True)        
+        self.loss = tf.reduce_mean(tf.square(self.beheavior_output - self.reward), name='loss')            
+        self.optimize = tf.train.RMSPropOptimizer(0.00025).minimize(self.loss)   
+
+
+    def build_network(self, x, trainable=True):
+        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
+        conv1_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)
+        conv1_hidden = tf.nn.relu(tf.nn.conv2d(x, conv1_weight, strides = [1,4,4,1], padding='SAME') + conv1_bias)
+
+        conv2_weight = tf.Variable(tf.truncated_normal([4, 4, 32, 64], stddev = 0.02), trainable = trainable)
+        conv2_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
+        conv2_hidden = tf.nn.relu(tf.nn.conv2d(conv1_hidden, conv2_weight, strides = [1,2,2,1], padding='SAME') + conv2_bias)
+
+        conv3_weight = tf.Variable(tf.truncated_normal([3, 3, 64, 64], stddev = 0.02), trainable = trainable)
+        conv3_bias = tf.Variable(tf.constant(0.02, shape = [64]), trainable = trainable)
+        conv3_hidden = tf.nn.relu(tf.nn.conv2d(conv2_hidden, conv3_weight, strides = [1,1,1,1], padding='SAME') + conv3_bias)
+
+        fc1_weight = tf.Variable(tf.truncated_normal([11*11*64, 512], stddev = 0.02), trainable = trainable)
+        fc1_bias = tf.Variable(tf.constant(0.02, shape = [512]), trainable = trainable)
+        conv3_hidden_flat = tf.reshape(conv3_hidden, [-1, 11*11*64])
+        fc1_hidden = tf.nn.relu(tf.matmul(conv3_hidden_flat, fc1_weight) + fc1_bias)
+
+        linear_weight = tf.Variable(tf.truncated_normal([512, 1], stddev = 0.02), trainable = trainable)
+        linear_bias = tf.Variable(tf.constant(0.02, shape = [1]), trainable = trainable)
+        outputs = tf.matmul(fc1_hidden, linear_weight) + linear_bias
+
+        variables = {
+            'conv1_weight' : conv1_weight,
+            'conv1_bias' : conv1_bias,
+            'conv2_weight' : conv2_weight,
+            'conv2_bias' : conv2_bias,
+            'conv3_weight' : conv3_weight,
+            'conv3_bias' : conv3_bias,
+            'fc1_weight' : fc1_weight,
+            'fc1_bias' : fc1_bias,
+            'linear_weight' : linear_weight,
+            'linear_bias' : linear_bias
+        }
+        return outputs, variables
+
+    def get_values(self, state):
+        return self.beheavior_output.eval(feed_dict={self.state : state})
+
+    def update(self, sess, state, reward):
+        reward = np.reshape(reward, (-1, 1))
+
+        loss, _ = sess.run([self.loss, self.optimize], feed_dict={
+            self.state : state,
+            self.reward : reward})
+        return loss

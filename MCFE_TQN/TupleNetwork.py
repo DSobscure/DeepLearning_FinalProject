@@ -5,7 +5,7 @@ class TupleNetwork(object):
         self.code_size = code_size
         self.feature_level = feature_level
         self.featureSet = []
-        for i in range(feature_level * 2):
+        for i in range(feature_level):
             self.featureSet.append(TupleFeature(self.code_size, i))
     
     def GetValue(self, state):
