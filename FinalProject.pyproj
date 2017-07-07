@@ -90,6 +90,9 @@
     <Compile Include="MCFE_DQN\TupleNetwork.py">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="MCFE_TQN\BreakoutAgent.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="MCFE_TQN\FlappyBirdAgent.py">
       <SubType>Code</SubType>
     </Compile>

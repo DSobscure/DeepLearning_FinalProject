@@ -16,9 +16,9 @@ GAMMA = 0.99
 
 INITIAL_EPSILON = 0.2
 FINAL_EPSILON = 0.0001
-EXPLORE_STPES = 100000
+EXPLORE_STPES = 250000
 ENCODING_STPES = 50000
-INITIAL_LIFE_STPES = 400000
+INITIAL_LIFE_STPES = 500000
 LIFE_STPES_INCREASE_FACTOR = 5
 
 # replay memory
@@ -60,9 +60,9 @@ def process_state(state):
 
 def main(_):
     env = Game.GameState()
-    qValue = np.array([TupleNetwork(), TupleNetwork()])
+    #qValue = np.array([TupleNetwork(), TupleNetwork()])
     dqn = DQN(GAMMA, 2)
-    scg = SCG(CODE_SIZE)
+    #scg = SCG(CODE_SIZE)
 
     replay_memory = deque()
     log = deque()
@@ -119,15 +119,15 @@ def main(_):
         else:
             state = next_state
 
-    for i in range(ENCODING_STPES):
-        samples = random.sample(replay_memory, BATCH_SIZE)
-        state_batch = [sample[0] for sample in samples]
-        random_code_batch = [sample[5] for sample in samples]
-        code_loss = scg.update_code(sess, state_batch, random_code_batch)
-        if i % 1000 == 0:
-            print("generate code...", i)
-            print(scg.get_code(state_batch))
-            print("code loss: ", code_loss)
+    #for i in range(ENCODING_STPES):
+    #    samples = random.sample(replay_memory, BATCH_SIZE)
+    #    state_batch = [sample[0] for sample in samples]
+    #    random_code_batch = [sample[5] for sample in samples]
+    #    code_loss = scg.update_code(sess, state_batch, random_code_batch)
+    #    if i % 1000 == 0:
+    #        print("generate code...", i)
+    #        print(scg.get_code(state_batch))
+    #        print("code loss: ", code_loss)
 
     for episode in range(1000000):
         observation = Game.GameState()
@@ -141,27 +141,27 @@ def main(_):
         episode_replay_memory = []
 
         for t in itertools.count():
-            if total_t > life_steps:
-                code_set.clear()
-                qValue = np.array([TupleNetwork(), TupleNetwork()])
-                life_steps *= LIFE_STPES_INCREASE_FACTOR
-                for i in range(ENCODING_STPES):
-                    samples = random.sample(replay_memory, BATCH_SIZE)
-                    state_batch = [sample[0] for sample in samples]
-                    random_code_batch = [sample[5] for sample in samples]
-                    code_loss = scg.update_code(sess, state_batch, random_code_batch)
-                    if i % 1000 == 0:
-                        print("generate code...", i)
-                        print(scg.get_code(state_batch))
-                        print("code loss: ", code_loss)
+            #if total_t > life_steps:
+            #    code_set.clear()
+            #    qValue = np.array([TupleNetwork(), TupleNetwork()])
+            #    life_steps *= LIFE_STPES_INCREASE_FACTOR
+            #    for i in range(ENCODING_STPES):
+            #        samples = random.sample(replay_memory, BATCH_SIZE)
+            #        state_batch = [sample[0] for sample in samples]
+            #        random_code_batch = [sample[5] for sample in samples]
+            #        code_loss = scg.update_code(sess, state_batch, random_code_batch)
+            #        if i % 1000 == 0:
+            #            print("generate code...", i)
+            #            print(scg.get_code(state_batch))
+            #            print("code loss: ", code_loss)
 
             actions = np.zeros([2])    
-            state_code = scg.get_code([state])[0]
-            code_set.add(state_code)
+            #state_code = scg.get_code([state])[0]
+            #code_set.add(state_code)
             if random.random() <= epsilon:
                 action = np.random.randint(2)
             else:    
-                action = np.argmax(dqn.get_values([state])[0] + [value.GetValue(state_code) for value in qValue])
+                action = dqn.select_action(state)
             actions[action] = 1
             
             next_observation, reward, done = env.frame_step(actions)
@@ -183,31 +183,31 @@ def main(_):
                 done_batch = [sample[3] for sample in samples]
                 next_state_batch = [sample[4] for sample in samples]
                 
-                state_code_batch = scg.get_code(state_batch)
-                next_state_code_batch = scg.get_code(next_state_batch)
+                #state_code_batch = scg.get_code(state_batch)
+                #next_state_code_batch = scg.get_code(next_state_batch)
 
                 dqn_loss = dqn.update(sess, state_batch, action_batch, reward_batch, done_batch, next_state_batch)               
 
-                tn_q_loss_sum = 0
-                for i in range(BATCH_SIZE):
-                    replay_state_code = state_code_batch[i]
-                    replay_action = action_batch[i]
-                    replay_reward = reward_batch[i]
-                    replay_done = done_batch[i]
-                    replay_next_state_code = next_state_code_batch[i]
-                    if replay_done:
-                        tn_q_loss = replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)
-                        qValue[replay_action].UpdateValue(replay_state_code, TN_Q_LEARNING_RATE * tn_q_loss)
-                    else:
-                        next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
-                        tn_q_loss = replay_reward + next_max - qValue[replay_action].GetValue(replay_state_code)
-                        qValue[replay_action].UpdateValue(replay_state_code, TN_Q_LEARNING_RATE * tn_q_loss)
-                    tn_q_loss_sum += abs(tn_q_loss)
+                #tn_q_loss_sum = 0
+                #for i in range(BATCH_SIZE):
+                #    replay_state_code = state_code_batch[i]
+                #    replay_action = action_batch[i]
+                #    replay_reward = reward_batch[i]
+                #    replay_done = done_batch[i]
+                #    replay_next_state_code = next_state_code_batch[i]
+                #    if replay_done:
+                #        tn_q_loss = replay_reward + 0 - qValue[replay_action].GetValue(replay_state_code)
+                #        qValue[replay_action].UpdateValue(replay_state_code, TN_Q_LEARNING_RATE * tn_q_loss)
+                #    else:
+                #        next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
+                #        tn_q_loss = replay_reward + next_max - qValue[replay_action].GetValue(replay_state_code)
+                #        qValue[replay_action].UpdateValue(replay_state_code, TN_Q_LEARNING_RATE * tn_q_loss)
+                #    tn_q_loss_sum += abs(tn_q_loss)
 
-                if total_t % 1000 == 0:
-                    print("Code Set: ", len(code_set))
-                    print("dqn loss:", dqn_loss)   
-                    print("tn q loss:", tn_q_loss_sum / BATCH_SIZE)           
+                #if total_t % 1000 == 0:
+                #    print("Code Set: ", len(code_set))
+                #    print("dqn loss:", dqn_loss)   
+                #    print("tn q loss:", tn_q_loss_sum / BATCH_SIZE)           
             if total_t % 10000 == 0:
                 dqn.update_target_network(sess)
 
