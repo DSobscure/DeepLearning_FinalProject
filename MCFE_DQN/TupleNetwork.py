@@ -1,21 +1,20 @@
 from TupleFeature import TupleFeature
 
 class TupleNetwork(object):
-    def __init__(self):
+    def __init__(self, code_size, feature_level):
+        self.code_size = code_size
+        self.feature_level = feature_level
         self.featureSet = []
-        self.featureSet.append(TupleFeature(1))
-        self.featureSet.append(TupleFeature(2))
-        self.featureSet.append(TupleFeature(3))
-        self.featureSet.append(TupleFeature(4))
-        self.featureSet.append(TupleFeature(5))
+        for i in range(feature_level):
+            self.featureSet.append(TupleFeature(self.code_size, i))
     
-    def GetValue(self, rawBoard):
+    def GetValue(self, state):
         sum = 0;
         for i in range(len(self.featureSet)):
-            sum += self.featureSet[i].GetScore(rawBoard)
-        return sum
+            sum += self.featureSet[i].GetScore(state)
+        return sum / len(self.featureSet)
 
-    def UpdateValue(self, rawBoard, delta):
+    def UpdateValue(self, state, delta):
         for i in range(len(self.featureSet)):
-            self.featureSet[i].UpdateScore(rawBoard, delta)
-
+            self.featureSet[i].UpdateScore(state, delta)
+            

@@ -12,7 +12,7 @@ class TupleNetwork(object):
         sum = 0;
         for i in range(len(self.featureSet)):
             sum += self.featureSet[i].GetScore(state)
-        return sum
+        return sum / len(self.featureSet)
 
     def UpdateValue(self, state, delta):
         for i in range(len(self.featureSet)):
