@@ -4,7 +4,7 @@ class SCG():
     def __init__(self, code_size, feature_level):
         self.code_size = code_size
         self.feature_level = feature_level
-        self.state = tf.placeholder(shape=[None, 84, 84, 3], dtype=tf.float32, name='state')
+        self.state = tf.placeholder(shape=[None, 84, 84, 4], dtype=tf.float32, name='state')
         self.random_code = tf.placeholder(shape=[None, code_size], dtype=tf.float32, name='random_code')
 
         self.state_code = []
@@ -17,7 +17,7 @@ class SCG():
             self.optimize.append(tf.train.RMSPropOptimizer(0.00025).minimize(code_loss))          
 
     def build_network(self, x, trainable=True):
-        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 3, 32], stddev = 0.02), trainable = trainable)
+        conv1_weight = tf.Variable(tf.truncated_normal([8, 8, 4, 32], stddev = 0.02), trainable = trainable)
         conv1_bias = tf.Variable(tf.constant(0.02, shape = [32]), trainable = trainable)             
         conv1_hidden_sum = tf.nn.conv2d(x, conv1_weight, strides = [1,3,3,1], padding='SAME') + conv1_bias        
         conv1_hidden = tf.nn.elu(conv1_hidden_sum)

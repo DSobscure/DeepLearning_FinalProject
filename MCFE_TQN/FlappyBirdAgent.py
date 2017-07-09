@@ -13,20 +13,20 @@ import math
 
 GAMMA = 0.99
 
-INITIAL_EPSILON = 0.2
+INITIAL_EPSILON = 0.1
 FINAL_EPSILON = 0.0001
-EXPLORE_STPES = 500000
+EXPLORE_STPES = 1000000
 ENCODING_STEPS = 50000
-INITIAL_LIFE_STPES = 1000000
+INITIAL_LIFE_STPES = 10000000
 LIFE_STPES_INCREASE_FACTOR = 10
 
 INIT_REPLAY_MEMORY_SIZE = 10000
-REPLAY_MEMORY_SIZE = 100000
+REPLAY_MEMORY_SIZE = 50000
 
 BATCH_SIZE = 32
 
 CODE_SIZE = 24
-FEATURE_LEVEL = 2
+FEATURE_LEVEL = 1
 
 Q_LEARNING_RATE = 1.0
 
@@ -80,7 +80,7 @@ def main(_):
     life_steps = INITIAL_LIFE_STPES
 
     observation = process_state(get_initial_state(env))
-    state = np.stack([observation] * 3, axis=2)
+    state = np.stack([observation] * 4, axis=2)
 
     while len(state_replay_memory) < INIT_REPLAY_MEMORY_SIZE:
         actions = np.zeros([2])
@@ -98,7 +98,7 @@ def main(_):
 
         if done:
             observation = process_state(get_initial_state(env))
-            state = np.stack([observation] * 3, axis=2)
+            state = np.stack([observation] * 4, axis=2)
             log.append(episode_reward)
             if len(log) > 100:
                 log.popleft()
@@ -114,14 +114,15 @@ def main(_):
         scg.update_code(sess, state_batch, random_code_batch)
         if i % 1000 == 0:
             print("generate code...", i)
-
+    savePath = saver.save(sess, "SavedNetwork/model.ckpt")
+    print("Model saved in file: %s" % savePath)
     total_t = 0
     for episode in range(1000000):
         episode_reward = 0
         episode_replay_memory = []
 
         observation = process_state(get_initial_state(env))
-        state = np.stack([observation] * 3, axis=2)
+        state = np.stack([observation] * 4, axis=2)
         state_code = scg.get_code([state])[0]
 
         for t in itertools.count():
@@ -187,7 +188,7 @@ def main(_):
                     else:
                         next_max = GAMMA * np.max([value.GetValue(replay_next_state_code) for value in qValue])
                         qValue[replay_action].UpdateValue(replay_state_code, Q_LEARNING_RATE * (replay_reward + next_max - qValue[replay_action].GetValue  (replay_state_code)))
-
+            
             if done:
                 average = np.mean(log)
                 deviation = np.std(log) + 0.01
@@ -209,6 +210,8 @@ def main(_):
                 if len(log) > 100:
                     log.popleft()
                 print ("Episode reward: ", episode_reward, 'episode = ', episode, 'total_t = ', total_t, '100 mean: ', np.mean(log), ' dev: ', np.std(log))
+                with open('traning_result', 'a') as file:
+                    file.writelines(str(episode) + "\t" + str(total_t) + "\t" + str(episode_reward) + "\t" + str(len(code_set)) + "\n")
                 total_t += 1
                 break
 
